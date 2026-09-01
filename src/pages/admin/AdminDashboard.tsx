@@ -213,11 +213,7 @@ const AdminDashboard: React.FC = () => {
                     {recentSubmissions.map((submission, index) => (
                       <tr key={index} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 font-medium text-gray-900">{submission.station}</td>
-                        <td className="px-4 py-3">
-                          <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                            {submission.quarter}
-                          </span>
-                        </td>
+                       
                         <td className="px-4 py-3 text-right font-semibold">
                           {submission.fileFoldersTotal + submission.registersTotal}
                         </td>
