@@ -27,15 +27,13 @@ const AdminSubmissions: React.FC = () => {
   // Local state for filters
   const [filters, setFilters] = useState({
     station: '',
-    quarter: '',
     page: 1,
     limit: 20,
   });
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedQuarter, setSelectedQuarter] = useState('');
   const [totalItems, setTotalItems] = useState(0);
-  
+
   // Modal state
   const [selectedSubmission, setSelectedSubmission] = useState<StationRequirementSubmission | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,41 +43,40 @@ const AdminSubmissions: React.FC = () => {
   // Fetch submissions
   const fetchSubmissions = useCallback(async () => {
     if (!accessToken || isInitializing) return;
-    
+
     try {
       const result = await dispatch(getSubmissions({
         station: filters.station || undefined,
-        quarter: filters.quarter || undefined,
         page: filters.page,
         limit: filters.limit,
       })).unwrap() as SubmissionsResponse;
-      
+
       console.log('📊 Submissions fetched:', {
         count: result.submissions.length,
         firstSubmission: result.submissions[0],
         hasId: result.submissions[0]?.id ? '✅' : '❌',
       });
-      
+
       return result;
     } catch (err) {
       console.error('Failed to fetch submissions:', err);
       return null;
     }
-  }, [dispatch, filters.station, filters.quarter, filters.page, filters.limit, accessToken, isInitializing]);
+  }, [dispatch, filters.station, filters.page, filters.limit, accessToken, isInitializing]);
 
   // Fetch submissions on mount and when filters change
   useEffect(() => {
     let isMounted = true;
-    
+
     const loadSubmissions = async () => {
       const result = await fetchSubmissions();
       if (isMounted && result) {
         setTotalItems(result.total || 0);
       }
     };
-    
+
     loadSubmissions();
-    
+
     return () => {
       isMounted = false;
     };
@@ -95,31 +92,29 @@ const AdminSubmissions: React.FC = () => {
   // Handle view submission details
   const handleViewSubmission = async (submission: StationRequirementSummary) => {
     console.log('🔍 View button clicked for submission:', submission);
-    
+
     setViewError(null);
-    
+
     let submissionId = submission.id;
-    
+
     if (!submissionId) {
-      console.log('⚠️ No ID found, searching by station+quarter...');
-      const found = submissions.find(
-        (s) => s.station === submission.station && s.quarter === submission.quarter
-      );
+      console.log('⚠️ No ID found, searching by station...');
+      const found = submissions.find((s) => s.station === submission.station);
       if (found && found.id) {
         submissionId = found.id;
-        console.log('✅ Found ID by station+quarter:', submissionId);
+        console.log('✅ Found ID by station:', submissionId);
       }
     }
-    
+
     if (!submissionId) {
       console.error('❌ Could not find submission ID for:', submission);
       setViewError('Could not find submission ID. Please try refreshing the page.');
       return;
     }
-    
+
     setIsLoadingDetails(true);
     setIsModalOpen(true);
-    
+
     try {
       console.log('📤 Fetching submission details for ID:', submissionId);
       const result = await dispatch(getSubmissionById(submissionId)).unwrap();
@@ -147,7 +142,6 @@ const AdminSubmissions: React.FC = () => {
     setFilters({
       ...filters,
       station: searchTerm,
-      quarter: selectedQuarter,
       page: 1,
     });
   };
@@ -155,10 +149,8 @@ const AdminSubmissions: React.FC = () => {
   // Clear filters
   const handleClearFilters = () => {
     setSearchTerm('');
-    setSelectedQuarter('');
     setFilters({
       station: '',
-      quarter: '',
       page: 1,
       limit: 20,
     });
@@ -242,7 +234,7 @@ const AdminSubmissions: React.FC = () => {
 
         {/* Filters Section */}
         <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="searchStation" className="block text-xs uppercase tracking-wider text-gray-600 mb-1">
                 Search by Station
@@ -256,24 +248,6 @@ const AdminSubmissions: React.FC = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyPress={(e) => e.key === 'Enter' && handleApplyFilters()}
               />
-            </div>
-            <div>
-              <label htmlFor="filterQuarter" className="block text-xs uppercase tracking-wider text-gray-600 mb-1">
-                Filter by Quarter
-              </label>
-              <select
-                id="filterQuarter"
-                value={selectedQuarter}
-                onChange={(e) => setSelectedQuarter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Quarters</option>
-                <option value="Q1 FY2026/27">Q1 FY2026/27</option>
-                <option value="Q2 FY2026/27">Q2 FY2026/27</option>
-                <option value="Q3 FY2026/27">Q3 FY2026/27</option>
-                <option value="Q4 FY2026/27">Q4 FY2026/27</option>
-                <option value="Annual FY2026/27">Annual FY2026/27</option>
-              </select>
             </div>
             <div className="flex items-end gap-2">
               <button
@@ -347,17 +321,8 @@ const AdminSubmissions: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Station
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Quarter
-                    </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      File Folders
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Registers
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
+                      File Folders Total
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Submitted At
@@ -370,11 +335,10 @@ const AdminSubmissions: React.FC = () => {
                 <tbody className="divide-y divide-gray-200">
                   {submissions.map((submission: StationRequirementSummary, index: number) => {
                     const globalIndex = (filters.page - 1) * filters.limit + index + 1;
-                    const totalItemsForRow = submission.fileFoldersTotal + submission.registersTotal;
 
                     return (
                       <tr
-                        key={`${submission.station}-${submission.submittedAt}-${index}`}
+                        key={submission.id || `${submission.station}-${submission.submittedAt}-${index}`}
                         className="hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-6 py-4 text-sm text-gray-500">
@@ -383,19 +347,8 @@ const AdminSubmissions: React.FC = () => {
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">
                           {submission.station}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
-                          <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                            {submission.quarter}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right text-gray-600">
-                          {submission.fileFoldersTotal.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right text-gray-600">
-                          {submission.registersTotal.toLocaleString()}
-                        </td>
                         <td className="px-6 py-4 text-sm text-right font-semibold text-gray-900">
-                          {totalItemsForRow.toLocaleString()}
+                          {submission.fileFoldersTotal.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
                           {formatDate(submission.submittedAt)}
@@ -443,7 +396,7 @@ const AdminSubmissions: React.FC = () => {
         )}
 
         {/* Footer Stats */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white border border-gray-300 rounded-lg p-4">
             <div className="text-xs uppercase tracking-wider text-gray-500">Total Submissions</div>
             <div className="text-2xl font-bold text-gray-900">{totalItems}</div>
@@ -452,12 +405,6 @@ const AdminSubmissions: React.FC = () => {
             <div className="text-xs uppercase tracking-wider text-gray-500">File Folders Total</div>
             <div className="text-2xl font-bold text-gray-900">
               {submissions.reduce((sum, s) => sum + s.fileFoldersTotal, 0).toLocaleString()}
-            </div>
-          </div>
-          <div className="bg-white border border-gray-300 rounded-lg p-4">
-            <div className="text-xs uppercase tracking-wider text-gray-500">Registers Total</div>
-            <div className="text-2xl font-bold text-gray-900">
-              {submissions.reduce((sum, s) => sum + s.registersTotal, 0).toLocaleString()}
             </div>
           </div>
         </div>
@@ -471,7 +418,7 @@ const AdminSubmissions: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
             onClick={handleCloseModal}
           ></div>
@@ -485,7 +432,7 @@ const AdminSubmissions: React.FC = () => {
                   <div>
                     <h2 className="text-xl font-semibold">Submission Details</h2>
                     <p className="text-sm text-[#cdd6e0] mt-1">
-                      {selectedSubmission?.station} · {selectedSubmission?.quarter}
+                      {selectedSubmission?.station}
                     </p>
                   </div>
                   <button
@@ -519,15 +466,11 @@ const AdminSubmissions: React.FC = () => {
                   </div>
                 ) : selectedSubmission ? (
                   <div className="space-y-6">
-                    {/* Submission Info - Updated with submitter name */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
+                    {/* Submission Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 rounded-lg p-4">
                       <div>
                         <p className="text-xs uppercase tracking-wider text-gray-500">Station</p>
                         <p className="font-medium text-gray-900">{selectedSubmission.station}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-gray-500">Quarter</p>
-                        <p className="font-medium text-gray-900">{selectedSubmission.quarter}</p>
                       </div>
                       <div>
                         <p className="text-xs uppercase tracking-wider text-gray-500">Submitted At</p>
@@ -584,70 +527,12 @@ const AdminSubmissions: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Registers Section */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3 border-b border-gray-200 pb-2">
-                        Case Registers ({selectedSubmission.registers.length} items)
-                      </h3>
-                      {selectedSubmission.registers.length === 0 ? (
-                        <p className="text-gray-500 text-sm italic">No registers requested</p>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Division
-                                </th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Name
-                                </th>
-                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Quantity
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                              {selectedSubmission.registers.map((item, idx) => (
-                                <tr key={idx} className="hover:bg-gray-50">
-                                  <td className="px-4 py-2 text-gray-600">{item.division}</td>
-                                  <td className="px-4 py-2 text-gray-800">{item.name}</td>
-                                  <td className="px-4 py-2 text-right font-medium">{item.quantity}</td>
-                                </tr>
-                              ))}
-                              <tr className="bg-gray-50 font-semibold">
-                                <td colSpan={2} className="px-4 py-2 text-right">Total:</td>
-                                <td className="px-4 py-2 text-right">
-                                  {selectedSubmission.registers.reduce((sum, item) => sum + item.quantity, 0)}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Summary Totals */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#12253d] text-[#f3efe4] rounded-lg p-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-[#c9b98a]">File Folders Total</p>
-                        <p className="text-2xl font-bold">
-                          {selectedSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-[#c9b98a]">Registers Total</p>
-                        <p className="text-2xl font-bold">
-                          {selectedSubmission.registers.reduce((sum, item) => sum + item.quantity, 0)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-[#c9b98a]">Grand Total</p>
-                        <p className="text-2xl font-bold">
-                          {selectedSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0) +
-                           selectedSubmission.registers.reduce((sum, item) => sum + item.quantity, 0)}
-                        </p>
-                      </div>
+                    {/* Summary Total */}
+                    <div className="bg-[#12253d] text-[#f3efe4] rounded-lg p-4">
+                      <p className="text-xs uppercase tracking-wider text-[#c9b98a]">File Folders Total</p>
+                      <p className="text-2xl font-bold">
+                        {selectedSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0)}
+                      </p>
                     </div>
                   </div>
                 ) : (
