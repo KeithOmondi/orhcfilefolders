@@ -272,9 +272,7 @@ const RequirementsForm: React.FC = () => {
           <h1 className="text-2xl font-semibold mb-2">
             File Folders — Station Requirement Form
           </h1>
-          <p className="text-sm text-[#cdd6e0]">
-            Each station fills in the quantities it needs. Submissions are saved and can be reviewed together once several stations have responded.
-          </p>
+         
         </div>
 
         {/* Instructions */}
@@ -355,9 +353,7 @@ const RequirementsForm: React.FC = () => {
           )}
         </div>
 
-        <p className="text-xs text-gray-500 mt-4">
-          Submissions save to shared storage, so once several stations fill this in, anyone opening this form can view every station's numbers via &quot;View all submissions.&quot; Data isn't sent anywhere outside this app.
-        </p>
+
       </div>
     </div>
   );
