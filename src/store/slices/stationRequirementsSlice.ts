@@ -3,60 +3,238 @@ import axios from 'axios';
 import axiosClient from '../../api/api';
 
 // --- CATEGORY DEFINITIONS ---
-export const FILE_FOLDERS_CATEGORIES: Record<string, string[]> = {
-  'Civil Division': [
-    'Civil Case Files',
-    'Civil Suit Folders',
-    'Miscellaneous Civil Folders',
+// Updated to match official case categories from the court document
+export const CASE_CATEGORIES: Record<string, string[]> = {
+  'Criminal': [
+    'Murder',
+    'Applications',
+    'Appeals',
+    'Court Martial',
+    'Revisions',
+    '2nd Appeals'
   ],
-  'Criminal Division': [
-    'Criminal Case Files',
-    'Traffic Case Folders',
+  'Anti-Corruption & Economic Crimes': [
+    'Appeals',
+    'Judicial Review',
+    'Suit',
+    'Revision',
+    'Miscellaneous',
+    'Petitions'
   ],
-  'Family Division': [
-    'Family Case Files',
-    'Succession Folders',
+  'Commercial & Tax': [
+    'Commercial Civil Matters',
+    'Commercial Miscellaneous',
+    'Insolvency Cause',
+    'Insolvency Petition',
+    'Income Tax Appeal',
+    'Insolvency Notice',
+    'Commercial Appeal',
+    'Commercial Petitions',
+    'Arbitration'
   ],
+  'Admiralty': [
+    'Admiralty'
+  ],
+  'Civil': [
+    'High Court Civil',
+    'High Court Civil Miscellaneous',
+    'High Court Civil Appeals/Applications'
+  ],
+  'Family': [
+    'Family Appeals',
+    'Family Miscellaneous Applications',
+    'Probate & Administration',
+    'Divorce',
+    'Adoption',
+    'Matrimonial Properties'
+  ],
+  'Judicial Review': [
+    'Judicial Review',
+    'Judicial Review Miscellaneous'
+  ],
+  'Constitutional & Human Rights': [
+    'Constitutional & Human Rights Petition',
+    'Petition',
+    'Miscellaneous Petition',
+    'Election Appeal',
+    'Miscellaneous Election Appeal',
+    'Election Petition'
+  ]
 };
 
-export const REGISTERS_CATEGORIES: Record<string, string[]> = {
-  'Civil Division': [
-    'Civil Cause List Register',
-    'Civil Case Diary',
-  ],
-  'Criminal Division': [
-    'Criminal Cause List Register',
-    'Bail Register',
-  ],
-  'Family Division': [
-    'Family Cause List Register',
-  ],
+// --- CASE CODES ---
+// Using unique keys with category prefix to avoid duplicates
+export const CASE_CODES: Record<string, string> = {
+  // Criminal
+  'Criminal_Murder': 'HC.CR.C.',
+  'Criminal_Applications': 'HC.MISC.CR.APPL',
+  'Criminal_Appeals': 'HC.CR.A.',
+  'Criminal_Court Martial': 'HCCMA',
+  'Criminal_Revisions': 'HC.CR.REV',
+  'Criminal_2nd Appeals': 'K.C.A',
+  
+  // Anti-Corruption & Economic Crimes
+  'Anti-Corruption & Economic Crimes_Appeals': 'HCACECA',
+  'Anti-Corruption & Economic Crimes_Judicial Review': 'HCACEC JR',
+  'Anti-Corruption & Economic Crimes_Suit': 'HCACECS',
+  'Anti-Corruption & Economic Crimes_Revision': 'HCACECR',
+  'Anti-Corruption & Economic Crimes_Miscellaneous': 'HCACEMISC',
+  'Anti-Corruption & Economic Crimes_Petitions': 'HCACEC PETITION',
+  
+  // Commercial & Tax
+  'Commercial & Tax_Commercial Civil Matters': 'HCCOMM',
+  'Commercial & Tax_Commercial Miscellaneous': 'HCCOMMMISC',
+  'Commercial & Tax_Insolvency Cause': 'HCCOMMIC',
+  'Commercial & Tax_Insolvency Petition': 'HCCOMMIP',
+  'Commercial & Tax_Income Tax Appeal': 'HCCOMMITA',
+  'Commercial & Tax_Insolvency Notice': 'HCCOMMIN',
+  'Commercial & Tax_Commercial Appeal': 'HCCCOMMA',
+  'Commercial & Tax_Commercial Petitions': 'HCCOMMPET',
+  'Commercial & Tax_Arbitration': 'HCCOMMARB',
+  
+  // Admiralty
+  'Admiralty_Admiralty': 'HCCOMMADMIR',
+  
+  // Civil
+  'Civil_High Court Civil': 'HCCC',
+  'Civil_High Court Civil Miscellaneous': 'HCCC Misc.',
+  'Civil_High Court Civil Appeals/Applications': 'HCCA',
+  
+  // Family
+  'Family_Family Appeals': 'HCFA',
+  'Family_Family Miscellaneous Applications': 'HCFMISC',
+  'Family_Probate & Administration': 'HCFP & A',
+  'Family_Divorce': 'HCFDC',
+  'Family_Adoption': 'HCFADOP',
+  'Family_Matrimonial Properties': 'HCFOS',
+  
+  // Judicial Review
+  'Judicial Review_Judicial Review': 'HCJR',
+  'Judicial Review_Judicial Review Miscellaneous': 'HCJRMISC',
+  
+  // Constitutional & Human Rights
+  'Constitutional & Human Rights_Constitutional & Human Rights Petition': 'CHR',
+  'Constitutional & Human Rights_Petition': 'HCCHRPET',
+  'Constitutional & Human Rights_Miscellaneous Petition': 'HCCCHRPETMISC',
+  'Constitutional & Human Rights_Election Appeal': 'HCCHREPA',
+  'Constitutional & Human Rights_Miscellaneous Election Appeal': 'HCCHRMEPA',
+  'Constitutional & Human Rights_Election Petition': 'HCCHREP'
+};
+
+// --- CASE COLORS ---
+// Using unique keys with category prefix to avoid duplicates
+export const CASE_COLORS: Record<string, string> = {
+  // Criminal
+  'Criminal_Murder': 'Dark Purple',
+  'Criminal_Applications': 'Light Yellow',
+  'Criminal_Appeals': 'Red',
+  'Criminal_Court Martial': 'Red',
+  'Criminal_Revisions': 'Sky Blue',
+  'Criminal_2nd Appeals': 'Dark Pink',
+  
+  // Anti-Corruption & Economic Crimes
+  'Anti-Corruption & Economic Crimes_Appeals': 'Blue',
+  'Anti-Corruption & Economic Crimes_Judicial Review': 'Dark Green',
+  'Anti-Corruption & Economic Crimes_Suit': 'Maroon',
+  'Anti-Corruption & Economic Crimes_Revision': 'Neon Green',
+  'Anti-Corruption & Economic Crimes_Miscellaneous': 'Orange',
+  'Anti-Corruption & Economic Crimes_Petitions': 'Red',
+  
+  // Commercial & Tax
+  'Commercial & Tax_Commercial Civil Matters': 'Light Purple',
+  'Commercial & Tax_Commercial Miscellaneous': 'Light Purple',
+  'Commercial & Tax_Insolvency Cause': 'Light Purple',
+  'Commercial & Tax_Insolvency Petition': 'Light Purple',
+  'Commercial & Tax_Income Tax Appeal': 'Light Purple',
+  'Commercial & Tax_Insolvency Notice': 'Light Purple',
+  'Commercial & Tax_Commercial Appeal': 'Light Purple',
+  'Commercial & Tax_Commercial Petitions': 'Light Purple',
+  'Commercial & Tax_Arbitration': 'Light Purple',
+  
+  // Admiralty
+  'Admiralty_Admiralty': 'Sky Blue',
+  
+  // Civil
+  'Civil_High Court Civil': 'Orange',
+  'Civil_High Court Civil Miscellaneous': 'Orange',
+  'Civil_High Court Civil Appeals/Applications': 'Grey',
+  
+  // Family
+  'Family_Family Appeals': 'Grey',
+  'Family_Family Miscellaneous Applications': 'Yellow',
+  'Family_Probate & Administration': 'Pink',
+  'Family_Divorce': 'Purple',
+  'Family_Adoption': 'Cream',
+  'Family_Matrimonial Properties': 'Yellow',
+  
+  // Judicial Review
+  'Judicial Review_Judicial Review': 'Dark Green',
+  'Judicial Review_Judicial Review Miscellaneous': 'Dark Green',
+  
+  // Constitutional & Human Rights
+  'Constitutional & Human Rights_Constitutional & Human Rights Petition': 'Light Green',
+  'Constitutional & Human Rights_Petition': 'Light Green',
+  'Constitutional & Human Rights_Miscellaneous Petition': 'Light Green',
+  'Constitutional & Human Rights_Election Appeal': 'Light Green',
+  'Constitutional & Human Rights_Miscellaneous Election Appeal': 'Light Green',
+  'Constitutional & Human Rights_Election Petition': 'Light Green'
+};
+
+// --- HELPER FUNCTIONS ---
+export const getCaseCode = (category: string, caseName: string): string | undefined => {
+  const key = `${category}_${caseName}`;
+  return CASE_CODES[key];
+};
+
+export const getCaseColor = (category: string, caseName: string): string | undefined => {
+  const key = `${category}_${caseName}`;
+  return CASE_COLORS[key];
+};
+
+export const getValidCategories = (): string[] => {
+  return Object.keys(CASE_CATEGORIES);
+};
+
+export const getValidNamesForCategory = (category: string): string[] => {
+  return CASE_CATEGORIES[category] || [];
+};
+
+export const getAllValidCases = (): { category: string; names: string[] }[] => {
+  return Object.entries(CASE_CATEGORIES).map(([category, names]) => ({
+    category,
+    names,
+  }));
+};
+
+// --- CASE LOOKUP FUNCTIONS ---
+export const getCaseInfo = (category: string, caseName: string) => {
+  const code = getCaseCode(category, caseName);
+  const color = getCaseColor(category, caseName);
+  return { code, color };
 };
 
 // Types matching backend structure
+// NOTE: "quarter" removed everywhere below — a DR only picks a station.
 export interface StationRequirementItem {
   division: string;
   name: string;
   quantity: number;
 }
 
-// ✅ UPDATED: Added submitterName and submitterEmail
 export interface StationRequirementSubmission {
   id?: string;
   station: string;
-  quarter: string;
   fileFolders: StationRequirementItem[];
   registers: StationRequirementItem[];
   submittedAt: string;
   submittedBy?: string;
-  submitterName?: string; // ✅ Added
-  submitterEmail?: string; // ✅ Added
+  submitterName?: string;
+  submitterEmail?: string;
 }
 
 export interface StationRequirementSummary {
   id?: string;
   station: string;
-  quarter: string;
   fileFoldersTotal: number;
   registersTotal: number;
   submittedAt: string;
@@ -79,7 +257,7 @@ interface StationRequirementsState {
   currentSubmission: StationRequirementSubmission | null;
   totals: SubmissionTotals | null;
   stations: string[];
-  quarters: string[];
+  categories: { category: string; names: string[] }[];
   isLoading: boolean;
   isSubmitting: boolean;
   error: string | null;
@@ -95,7 +273,7 @@ const initialState: StationRequirementsState = {
   currentSubmission: null,
   totals: null,
   stations: [],
-  quarters: [],
+  categories: getAllValidCases(),
   isLoading: false,
   isSubmitting: false,
   error: null,
@@ -113,7 +291,6 @@ export const createSubmission = createAsyncThunk<
   { submission: StationRequirementSubmission },
   {
     station: string;
-    quarter: string;
     fileFolders: StationRequirementItem[];
     registers: StationRequirementItem[];
   },
@@ -122,7 +299,6 @@ export const createSubmission = createAsyncThunk<
   try {
     console.log('📤 Creating submission:', {
       station: payload.station,
-      quarter: payload.quarter,
       fileFoldersCount: payload.fileFolders.length,
       registersCount: payload.registers.length,
       fileFoldersTotal: payload.fileFolders.reduce((sum, item) => sum + item.quantity, 0),
@@ -134,7 +310,6 @@ export const createSubmission = createAsyncThunk<
     console.log('✅ Submission created:', {
       id: response.data.data.submission.id,
       station: response.data.data.submission.station,
-      quarter: response.data.data.submission.quarter,
     });
     
     return response.data.data;
@@ -165,7 +340,6 @@ export const getSubmissions = createAsyncThunk<
   },
   {
     station?: string;
-    quarter?: string;
     fromDate?: string;
     toDate?: string;
     page?: number;
@@ -208,12 +382,11 @@ export const getSubmissionById = createAsyncThunk<
 // Get submissions by station
 export const getSubmissionsByStation = createAsyncThunk<
   { submissions: StationRequirementSubmission[] },
-  { station: string; quarter?: string },
+  { station: string },
   { rejectValue: string }
->('stationRequirements/getSubmissionsByStation', async ({ station, quarter }, { rejectWithValue }) => {
+>('stationRequirements/getSubmissionsByStation', async ({ station }, { rejectWithValue }) => {
   try {
-    const params = quarter ? { quarter } : {};
-    const response = await axiosClient.get(`/station-requirements/station/${station}`, { params });
+    const response = await axiosClient.get(`/station-requirements/station/${station}`);
     return response.data.data;
   } catch (err: unknown) {
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
@@ -231,7 +404,6 @@ export const updateSubmission = createAsyncThunk<
   {
     id: string;
     station?: string;
-    quarter?: string;
     fileFolders?: StationRequirementItem[];
     registers?: StationRequirementItem[];
   },
@@ -339,57 +511,6 @@ export const getUniqueStations = createAsyncThunk<
   }
 });
 
-// Get unique quarters
-export const getUniqueQuarters = createAsyncThunk<
-  { quarters: string[] },
-  void,
-  { rejectValue: string }
->('stationRequirements/getUniqueQuarters', async (_, { rejectWithValue, getState }) => {
-  try {
-    const response = await axiosClient.get('/station-requirements/quarters');
-    
-    if (response.data?.data?.quarters && Array.isArray(response.data.data.quarters)) {
-      return { quarters: response.data.data.quarters };
-    }
-    
-    const state = getState() as { stationRequirements: StationRequirementsState };
-    const submissions = state.stationRequirements.submissions;
-    
-    if (submissions.length > 0) {
-      const quarters = [...new Set(submissions.map(s => s.quarter))].sort();
-      console.log('📊 Derived quarters from submissions:', quarters);
-      return { quarters };
-    }
-    
-    return { quarters: [] };
-  } catch (err: unknown) {
-    try {
-      const state = getState() as { stationRequirements: StationRequirementsState };
-      const submissions = state.stationRequirements.submissions;
-      
-      if (submissions.length > 0) {
-        const quarters = [...new Set(submissions.map(s => s.quarter))].sort();
-        console.log('📊 Derived quarters from submissions (API failed):', quarters);
-        return { quarters };
-      }
-    } catch (deriveError) {
-      console.warn('Could not derive quarters from state:', deriveError);
-    }
-    
-    if (axios.isAxiosError(err) && (err.response?.status === 400 || err.response?.status === 404)) {
-      console.warn('⚠️ Quarters endpoint not available, returning empty array');
-      return { quarters: [] };
-    }
-    
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch quarters.'
-      );
-    }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
-
 // --- SLICE ---
 
 const stationRequirementsSlice = createSlice({
@@ -418,22 +539,15 @@ const stationRequirementsSlice = createSlice({
     setStations: (state, action: PayloadAction<string[]>) => {
       state.stations = action.payload;
     },
-    setQuarters: (state, action: PayloadAction<string[]>) => {
-      state.quarters = action.payload;
-    },
-    deriveStationsAndQuarters: (state) => {
+    deriveStations: (state) => {
       if (state.submissions.length > 0) {
         const stations = [...new Set(state.submissions.map(s => s.station))].sort();
-        const quarters = [...new Set(state.submissions.map(s => s.quarter))].sort();
         
         if (stations.length > 0) {
           state.stations = stations;
         }
-        if (quarters.length > 0) {
-          state.quarters = quarters;
-        }
         
-        console.log('🔄 Derived from submissions:', { stations, quarters });
+        console.log('🔄 Derived from submissions:', { stations });
       }
     },
   },
@@ -451,7 +565,6 @@ const stationRequirementsSlice = createSlice({
           state.submissions.unshift({
             id: action.payload.submission.id,
             station: action.payload.submission.station,
-            quarter: action.payload.submission.quarter,
             fileFoldersTotal: action.payload.submission.fileFolders.reduce(
               (sum, item) => sum + item.quantity,
               0
@@ -485,13 +598,9 @@ const stationRequirementsSlice = createSlice({
         
         if (state.submissions.length > 0) {
           const stations = [...new Set(state.submissions.map(s => s.station))].sort();
-          const quarters = [...new Set(state.submissions.map(s => s.quarter))].sort();
           
           if (stations.length > 0 && state.stations.length === 0) {
             state.stations = stations;
-          }
-          if (quarters.length > 0 && state.quarters.length === 0) {
-            state.quarters = quarters;
           }
         }
       })
@@ -524,7 +633,6 @@ const stationRequirementsSlice = createSlice({
         state.submissions = action.payload.submissions.map((sub) => ({
           id: sub.id,
           station: sub.station,
-          quarter: sub.quarter,
           fileFoldersTotal: sub.fileFolders.reduce((sum, item) => sum + item.quantity, 0),
           registersTotal: sub.registers.reduce((sum, item) => sum + item.quantity, 0),
           submittedAt: sub.submittedAt,
@@ -544,14 +652,12 @@ const stationRequirementsSlice = createSlice({
         state.isSubmitting = false;
         state.currentSubmission = action.payload.submission;
         const index = state.submissions.findIndex(
-          (s) => s.station === action.payload.submission.station &&
-                 s.quarter === action.payload.submission.quarter
+          (s) => s.id === action.payload.submission.id
         );
         if (index !== -1) {
           state.submissions[index] = {
             id: action.payload.submission.id,
             station: action.payload.submission.station,
-            quarter: action.payload.submission.quarter,
             fileFoldersTotal: action.payload.submission.fileFolders.reduce(
               (sum, item) => sum + item.quantity,
               0
@@ -631,37 +737,6 @@ const stationRequirementsSlice = createSlice({
             console.log('📊 Auto-derived stations from submissions (after rejection):', stations);
           }
         }
-      })
-
-      // --- getUniqueQuarters ---
-      .addCase(getUniqueQuarters.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(getUniqueQuarters.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.quarters = action.payload.quarters;
-        
-        if (state.quarters.length === 0 && state.submissions.length > 0) {
-          const quarters = [...new Set(state.submissions.map(s => s.quarter))].sort();
-          if (quarters.length > 0) {
-            state.quarters = quarters;
-            console.log('📊 Auto-derived quarters from submissions:', quarters);
-          }
-        }
-      })
-      .addCase(getUniqueQuarters.rejected, (state, action) => {
-        state.isLoading = false;
-        if (!action.payload?.includes('400') && !action.payload?.includes('404')) {
-          state.error = action.payload || 'Failed to fetch quarters';
-        }
-        if (state.submissions.length > 0) {
-          const quarters = [...new Set(state.submissions.map(s => s.quarter))].sort();
-          if (quarters.length > 0) {
-            state.quarters = quarters;
-            console.log('📊 Auto-derived quarters from submissions (after rejection):', quarters);
-          }
-        }
       });
   },
 });
@@ -673,8 +748,7 @@ export const {
   setPage,
   setLimit,
   setStations,
-  setQuarters,
-  deriveStationsAndQuarters,
+  deriveStations,
 } = stationRequirementsSlice.actions;
 
 export default stationRequirementsSlice.reducer;

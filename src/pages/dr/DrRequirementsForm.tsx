@@ -3,37 +3,78 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   createSubmission,
   getUniqueStations,
-  getUniqueQuarters,
   clearError,
-  FILE_FOLDERS_CATEGORIES,
-  REGISTERS_CATEGORIES,
+  CASE_CATEGORIES,
+  getCaseCode,
+  getCaseColor,
   type StationRequirementItem,
 } from '../../store/slices/stationRequirementsSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 
 interface FormData {
   station: string;
-  quarter: string;
 }
 
-interface FileFolderValues {
-  [key: string]: number;
-}
+// ============================================================
+// COLOUR NAME -> swatch hex, for the "Colour" column
+// ============================================================
+const COLOR_HEX: Record<string, string> = {
+  'Dark Purple': '#5B2C6F',
+  'Light Yellow': '#FFF6B7',
+  'Red': '#E53935',
+  'Sky Blue': '#87CEEB',
+  'Dark Pink': '#C2185B',
+  'Blue': '#1E88E5',
+  'Dark Green': '#1B5E20',
+  'Maroon': '#800000',
+  'Neon Green': '#39FF14',
+  'Orange': '#FB8C00',
+  'Light Purple': '#D1C4E9',
+  'Grey': '#9E9E9E',
+  'Yellow': '#FFEB3B',
+  'Pink': '#F48FB1',
+  'Purple': '#8E24AA',
+  'Cream': '#FFF3D6',
+  'Light Green': '#C8E6C9',
+};
 
-interface RegisterValues {
-  [key: string]: number;
-}
+const getColorHex = (colorName?: string): string => (colorName && COLOR_HEX[colorName]) || '#E5E7EB';
 
-// Pure helper — no dependency on component state, safe to call during
-// render (e.g. as a useState lazy initializer) rather than in an effect.
-const buildInitialValues = (categories: Record<string, string[]>, prefix: string): FileFolderValues => {
-  const initial: FileFolderValues = {};
-  Object.values(categories).forEach((items) => {
+// Nested: { [division]: { [caseName]: quantity } }
+type CategoryValues = Record<string, Record<string, number>>;
+
+// ============================================================
+// Helper to build initial values from CASE_CATEGORIES
+// (single source of truth — matches the official document exactly)
+// ============================================================
+const buildInitialValues = (): CategoryValues => {
+  const initial: CategoryValues = {};
+  Object.entries(CASE_CATEGORIES).forEach(([division, items]) => {
+    initial[division] = {};
     items.forEach((item) => {
-      initial[`${prefix}_${item}`] = 0;
+      initial[division][item] = 0;
     });
   });
   return initial;
+};
+
+const calculateTotal = (values: CategoryValues): number => {
+  return Object.values(values).reduce(
+    (sum, items) => sum + Object.values(items).reduce((s, v) => s + v, 0),
+    0
+  );
+};
+
+const collectItems = (values: CategoryValues): StationRequirementItem[] => {
+  const items: StationRequirementItem[] = [];
+  Object.entries(values).forEach(([division, cases]) => {
+    Object.entries(cases).forEach(([name, quantity]) => {
+      if (quantity > 0) {
+        items.push({ division, name, quantity });
+      }
+    });
+  });
+  return items;
 };
 
 const RequirementsForm: React.FC = () => {
@@ -43,56 +84,37 @@ const RequirementsForm: React.FC = () => {
   );
   const { user, accessToken, isInitializing } = useSelector((state: RootState) => state.auth);
 
-  // Get station from user or use empty string - calculated during render
   const userStation = user?.station || '';
 
   const [formData, setFormData] = useState<FormData>({
     station: userStation,
-    quarter: 'Q1 FY2026/27',
   });
 
-  // Lazy initializers run once, during the initial render, so there's no
-  // need for an effect (and no "setState synchronously in effect" warning).
-  const [fileFolderValues, setFileFolderValues] = useState<FileFolderValues>(
-    () => buildInitialValues(FILE_FOLDERS_CATEGORIES, 'ff')
-  );
-  const [registerValues, setRegisterValues] = useState<RegisterValues>(
-    () => buildInitialValues(REGISTERS_CATEGORIES, 'reg')
-  );
+  const [fileFolderValues, setFileFolderValues] = useState<CategoryValues>(buildInitialValues);
 
   const [showSuccess, setShowSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Load stations and quarters ONLY when auth is fully initialized and we have a token
   useEffect(() => {
     if (!isInitializing && accessToken) {
       dispatch(getUniqueStations());
-      dispatch(getUniqueQuarters());
     }
   }, [dispatch, isInitializing, accessToken]);
 
-  // Clear error when component unmounts
   useEffect(() => {
     return () => {
       dispatch(clearError());
     };
   }, [dispatch]);
 
-  const handleFileFolderChange = (key: string, value: number): void => {
+  const handleFileFolderChange = (division: string, name: string, value: number): void => {
     setFileFolderValues((prev) => ({
       ...prev,
-      [key]: Math.max(0, value),
+      [division]: { ...prev[division], [name]: Math.max(0, value) },
     }));
   };
 
-  const handleRegisterChange = (key: string, value: number): void => {
-    setRegisterValues((prev) => ({
-      ...prev,
-      [key]: Math.max(0, value),
-    }));
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -100,50 +122,15 @@ const RequirementsForm: React.FC = () => {
     }));
   };
 
-  const calculateTotal = (values: FileFolderValues | RegisterValues): number => {
-    return Object.values(values).reduce((sum, val) => sum + val, 0);
-  };
-
   const collectData = (): {
     station: string;
-    quarter: string;
     fileFolders: StationRequirementItem[];
     registers: StationRequirementItem[];
   } => {
-    const fileFolders: StationRequirementItem[] = [];
-    const registers: StationRequirementItem[] = [];
-
-    Object.entries(fileFolderValues).forEach(([key, quantity]) => {
-      if (quantity > 0) {
-        const name = key.replace('ff_', '');
-        let division = '';
-        Object.entries(FILE_FOLDERS_CATEGORIES).forEach(([cat, items]) => {
-          if (items.includes(name)) {
-            division = cat;
-          }
-        });
-        fileFolders.push({ division, name, quantity });
-      }
-    });
-
-    Object.entries(registerValues).forEach(([key, quantity]) => {
-      if (quantity > 0) {
-        const name = key.replace('reg_', '');
-        let division = '';
-        Object.entries(REGISTERS_CATEGORIES).forEach(([cat, items]) => {
-          if (items.includes(name)) {
-            division = cat;
-          }
-        });
-        registers.push({ division, name, quantity });
-      }
-    });
-
     return {
       station: formData.station,
-      quarter: formData.quarter,
-      fileFolders,
-      registers,
+      fileFolders: collectItems(fileFolderValues),
+      registers: [], // Registers section removed from the form — folders cover both.
     };
   };
 
@@ -158,39 +145,22 @@ const RequirementsForm: React.FC = () => {
     }
 
     const data = collectData();
-    if (data.fileFolders.length === 0 && data.registers.length === 0) {
+    if (data.fileFolders.length === 0) {
       setErrorMessage('Enter at least one quantity greater than 0.');
       return;
     }
 
-    // Log the complete submission data for debugging
     console.log('📤 Submitting station requirements:', {
       station: data.station,
-      quarter: data.quarter,
       fileFolders: data.fileFolders,
-      registers: data.registers,
-      fileFoldersCount: data.fileFolders.length,
-      registersCount: data.registers.length,
-      totalFileFolders: data.fileFolders.reduce((sum, item) => sum + item.quantity, 0),
-      totalRegisters: data.registers.reduce((sum, item) => sum + item.quantity, 0),
-      timestamp: new Date().toISOString()
     });
 
-    // Validate the data structure before sending
-    if (!Array.isArray(data.fileFolders) || !Array.isArray(data.registers)) {
-      setErrorMessage('Invalid data structure: fileFolders and registers must be arrays.');
-      return;
-    }
-
     try {
-      // The payload is correctly structured with fileFolders and registers as arrays
       const result = await dispatch(createSubmission(data)).unwrap();
       console.log('✅ Submission successful:', result);
-      
+
       setShowSuccess(true);
-      // Reset quantities but keep station and quarter
-      setFileFolderValues(buildInitialValues(FILE_FOLDERS_CATEGORIES, 'ff'));
-      setRegisterValues(buildInitialValues(REGISTERS_CATEGORIES, 'reg'));
+      setFileFolderValues(buildInitialValues());
       setTimeout(() => setShowSuccess(false), 5000);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to save submission. Please try again.';
@@ -200,37 +170,56 @@ const RequirementsForm: React.FC = () => {
   };
 
   const renderCategorySection = (
-    categories: Record<string, string[]>,
-    values: FileFolderValues | RegisterValues,
-    onChange: (key: string, value: number) => void,
+    values: CategoryValues,
+    onChange: (division: string, name: string, value: number) => void,
     prefix: string,
     total: number
   ): React.ReactElement => {
     return (
       <div className="space-y-4">
-        {Object.entries(categories).map(([division, items]) => (
+        {/* Column header, matching the source document's table */}
+        <div className="hidden md:flex items-center px-4 py-2 text-xs uppercase tracking-wider text-gray-500 font-semibold">
+          <div className="flex-1">Case Category</div>
+          <div className="w-32 text-center">Case Code</div>
+          <div className="w-32 text-center">Colour</div>
+          <div className="w-24 text-right">Quantity</div>
+        </div>
+
+        {Object.entries(CASE_CATEGORIES).map(([division, items]) => (
           <div key={division} className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-amber-50 px-4 py-2 font-semibold text-sm text-gray-800">
+            <div className="bg-emerald-100 px-4 py-2 font-semibold text-sm text-gray-800 uppercase">
               {division}
             </div>
             {items.map((item) => {
-              const key = `${prefix}_${item}`;
+              const key = `${prefix}_${division}_${item}`;
+              const code = getCaseCode(division, item);
+              const colorName = getCaseColor(division, item);
               return (
                 <div
                   key={key}
-                  className="flex items-center justify-between px-4 py-3 border-t border-gray-100"
+                  className="flex flex-wrap md:flex-nowrap items-center gap-y-2 px-4 py-3 border-t border-gray-100"
                 >
-                  <label htmlFor={key} className="flex-1 text-sm">
+                  <label htmlFor={key} className="flex-1 min-w-[140px] text-sm">
                     {item}
-                    <span className="block text-xs text-gray-500">How many needed?</span>
                   </label>
+                  <div className="w-32 text-center text-xs font-mono text-gray-600">
+                    {code || '—'}
+                  </div>
+                  <div className="w-32 flex items-center justify-center gap-2">
+                    <span
+                      className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300 shrink-0"
+                      style={{ backgroundColor: getColorHex(colorName) }}
+                      title={colorName || 'Unknown'}
+                    />
+                    <span className="text-xs text-gray-600 truncate">{colorName || '—'}</span>
+                  </div>
                   <input
                     id={key}
                     type="number"
                     min="0"
                     step="1"
-                    value={values[key] || 0}
-                    onChange={(e) => onChange(key, parseInt(e.target.value, 10) || 0)}
+                    value={values[division]?.[item] || 0}
+                    onChange={(e) => onChange(division, item, parseInt(e.target.value, 10) || 0)}
                     className="w-24 px-3 py-2 border border-gray-300 rounded-md text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="0"
                   />
@@ -249,7 +238,6 @@ const RequirementsForm: React.FC = () => {
     );
   };
 
-  // Show loading state while auth is initializing
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-[#f7f5f0] flex items-center justify-center">
@@ -261,7 +249,6 @@ const RequirementsForm: React.FC = () => {
     );
   }
 
-  // If not authenticated, show message (though ProtectedRoute should handle this)
   if (!accessToken) {
     return (
       <div className="min-h-screen bg-[#f7f5f0] flex items-center justify-center">
@@ -273,7 +260,6 @@ const RequirementsForm: React.FC = () => {
   }
 
   const fileFoldersTotal = calculateTotal(fileFolderValues);
-  const registersTotal = calculateTotal(registerValues);
 
   return (
     <div className="min-h-screen bg-[#f7f5f0] py-8">
@@ -284,48 +270,49 @@ const RequirementsForm: React.FC = () => {
             Data Collection · Ref RHC/DSCM/112
           </div>
           <h1 className="text-2xl font-semibold mb-2">
-            File Folders &amp; Case Registers — Station Requirement Form
+            File Folders — Station Requirement Form
           </h1>
           <p className="text-sm text-[#cdd6e0]">
             Each station fills in the quantities it needs. Submissions are saved and can be reviewed together once several stations have responded.
           </p>
         </div>
 
+        {/* Instructions */}
+        <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8 text-sm text-gray-700 space-y-3">
+          <p>
+            To facilitate effective planning and ensure adequate provision of registry supplies, we
+            request Your Honours to indicate your station/sub-registry&rsquo;s <strong>ANNUAL</strong> requirements
+            for file folders and registers.
+          </p>
+          <p>
+            Kindly indicate the required quantity for each category of folders and registers, based on
+            the number and nature of cases filed at your station/division/sub-registry.
+          </p>
+          <p>
+            Please indicate &ldquo;0&rdquo; where a particular folder and/or register is not applicable to your
+            station/division/sub-registry.
+          </p>
+          <p>
+            For any clarifications, please reach out to Hon. Linda Mumassabba from our Office.
+          </p>
+          <p className="font-semibold">RHC</p>
+        </div>
+
         {/* Station Info */}
-        <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="station" className="block text-xs uppercase tracking-wider text-gray-600 mb-1">
-              Station name
-            </label>
-            <input
-              id="station"
-              name="station"
-              type="text"
-              value={formData.station}
-              onChange={handleInputChange}
-              placeholder="e.g. Kisumu Law Courts"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={!!user?.station}
-            />
-          </div>
-          <div>
-            <label htmlFor="quarter" className="block text-xs uppercase tracking-wider text-gray-600 mb-1">
-              Quarter / period
-            </label>
-            <select
-              id="quarter"
-              name="quarter"
-              value={formData.quarter}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Q1 FY2026/27">Q1 FY2026/27</option>
-              <option value="Q2 FY2026/27">Q2 FY2026/27</option>
-              <option value="Q3 FY2026/27">Q3 FY2026/27</option>
-              <option value="Q4 FY2026/27">Q4 FY2026/27</option>
-              <option value="Annual FY2026/27">Annual FY2026/27</option>
-            </select>
-          </div>
+        <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8">
+          <label htmlFor="station" className="block text-xs uppercase tracking-wider text-gray-600 mb-1">
+            Station name
+          </label>
+          <input
+            id="station"
+            name="station"
+            type="text"
+            value={formData.station}
+            onChange={handleInputChange}
+            placeholder="e.g. Kisumu Law Courts"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={!!user?.station}
+          />
         </div>
 
         {/* File Folders Section */}
@@ -335,26 +322,10 @@ const RequirementsForm: React.FC = () => {
             <span className="text-sm text-gray-600">{fileFoldersTotal} items</span>
           </div>
           {renderCategorySection(
-            FILE_FOLDERS_CATEGORIES,
             fileFolderValues,
             handleFileFolderChange,
             'ff',
             fileFoldersTotal
-          )}
-        </div>
-
-        {/* Registers Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between border-b-2 border-gray-800 pb-2 mb-4">
-            <h2 className="text-lg font-semibold">Case Registers Needed</h2>
-            <span className="text-sm text-gray-600">{registersTotal} items</span>
-          </div>
-          {renderCategorySection(
-            REGISTERS_CATEGORIES,
-            registerValues,
-            handleRegisterChange,
-            'reg',
-            registersTotal
           )}
         </div>
 
