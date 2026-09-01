@@ -16,7 +16,7 @@ const DrDashboard: React.FC = () => {
   );
   const { user, accessToken, isInitializing } = useSelector((state: RootState) => state.auth);
 
-  // Calculate stats using useMemo instead of useState + useEffect
+  // Calculate stats using useMemo
   const stats = useMemo(() => {
     if (submissions.length === 0) {
       return {
@@ -62,7 +62,6 @@ const DrDashboard: React.FC = () => {
 
   useEffect(() => {
     if (accessToken && !isInitializing) {
-      // Fetch DR's own submissions (drafts and submitted)
       dispatch(getMySubmissions({ page: 1, limit: 100 }));
     }
   }, [dispatch, accessToken, isInitializing]);
@@ -161,8 +160,35 @@ const DrDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Stats Grid - Three Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          {/* Card 1: Total File Folders */}
+          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total File Folders</div>
+                <div className="text-2xl font-extrabold text-slate-900 mt-1">{stats.totalFileFolders}</div>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-amber-50 text-[#a3782e] flex items-center justify-center text-lg">
+                📁
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Total Registers */}
+          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Registers</div>
+                <div className="text-2xl font-extrabold text-slate-900 mt-1">{stats.totalRegisters}</div>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
+                📖
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Total Submissions with Status */}
           <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -173,90 +199,21 @@ const DrDashboard: React.FC = () => {
                 📋
               </div>
             </div>
-          </div>
-
-          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Drafts</div>
-                <div className="text-2xl font-extrabold text-amber-600 mt-1">{stats.draftsCount}</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
-                ✏️
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending Review</div>
-                <div className="text-2xl font-extrabold text-blue-600 mt-1">{stats.pendingReviewCount}</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
-                ⏳
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Approved</div>
-                <div className="text-2xl font-extrabold text-green-600 mt-1">{stats.approvedCount}</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-green-50 text-green-600 flex items-center justify-center text-lg">
-                ✅
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Additional Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Completion Rate</div>
-                <div className="text-2xl font-extrabold text-slate-900 mt-1">{stats.completionRate}%</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
-                📊
-              </div>
-            </div>
-            <div className="mt-3 w-full bg-slate-200 rounded-full h-2">
-              <div 
-                className={`h-2 rounded-full transition-all duration-500 ${
-                  stats.completionRate >= 80 ? 'bg-green-500' :
-                  stats.completionRate >= 50 ? 'bg-amber-500' :
-                  'bg-red-500'
-                }`}
-                style={{ width: `${stats.completionRate}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total File Folders</div>
-                <div className="text-2xl font-extrabold text-slate-900 mt-1">{stats.totalFileFolders.toLocaleString()}</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-amber-50 text-[#a3782e] flex items-center justify-center text-lg">
-                📁
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Registers</div>
-                <div className="text-2xl font-extrabold text-slate-900 mt-1">{stats.totalRegisters.toLocaleString()}</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
-                📖
-              </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-slate-500">Status:</span>
+              {stats.draftsCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+                  {stats.draftsCount} Draft{stats.draftsCount > 1 ? 's' : ''}
+                </span>
+              )}
+              {stats.submittedCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">
+                  {stats.submittedCount} Submitted
+                </span>
+              )}
+              {stats.totalSubmissions === 0 && (
+                <span className="text-xs text-slate-400">No submissions</span>
+              )}
             </div>
           </div>
         </div>
@@ -320,8 +277,6 @@ const DrDashboard: React.FC = () => {
             </div>
           )}
         </div>
-
-
 
         <p className="text-xs text-slate-400 mt-6 text-center">
           Deputy Registrar Dashboard · Last updated {new Date().toLocaleString()}
