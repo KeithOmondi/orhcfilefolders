@@ -6,8 +6,11 @@ import {
   clearError,
   clearCurrentSubmission,
   CASE_CATEGORIES,
+  CASE_REGISTERS,
+  ADDITIONAL_REGISTERS,
   getCaseCode,
   getCaseColor,
+  //getAllRegistersFlat,
   type StationRequirementItem,
   type SubmissionStatus,
   type StationRequirementSubmission,
@@ -44,13 +47,13 @@ const COLOR_HEX: Record<string, string> = {
 
 const getColorHex = (colorName?: string): string => (colorName && COLOR_HEX[colorName]) || '#E5E7EB';
 
-// Nested: { [division]: { [caseName]: quantity } }
+// Nested: { [division]: { [name]: quantity } }
 type CategoryValues = Record<string, Record<string, number>>;
 
 // ============================================================
 // Helper to build initial values from CASE_CATEGORIES
 // ============================================================
-const buildInitialValues = (): CategoryValues => {
+const buildInitialFileFolderValues = (): CategoryValues => {
   const initial: CategoryValues = {};
   Object.entries(CASE_CATEGORIES).forEach(([division, items]) => {
     initial[division] = {};
@@ -62,14 +65,38 @@ const buildInitialValues = (): CategoryValues => {
 };
 
 // ============================================================
+// Helper to build initial values for Registers
+// ============================================================
+const buildInitialRegisterValues = (): CategoryValues => {
+  const initial: CategoryValues = {};
+  
+  // Add registers from CASE_REGISTERS
+  Object.entries(CASE_REGISTERS).forEach(([division, items]) => {
+    initial[division] = {};
+    items.forEach((item) => {
+      initial[division][item] = 0;
+    });
+  });
+  
+  // Add Additional registers
+  initial['Additional'] = {};
+  ADDITIONAL_REGISTERS.forEach((item) => {
+    initial['Additional'][item] = 0;
+  });
+  
+  return initial;
+};
+
+// ============================================================
 // Helper to populate form from existing submission
 // ============================================================
 const populateFromSubmission = (
   submission: StationRequirementSubmission | null
-): { fileFolderValues: CategoryValues } => {
-  const fileFolderValues = buildInitialValues();
+): { fileFolderValues: CategoryValues; registerValues: CategoryValues } => {
+  const fileFolderValues = buildInitialFileFolderValues();
+  const registerValues = buildInitialRegisterValues();
 
-  if (!submission) return { fileFolderValues };
+  if (!submission) return { fileFolderValues, registerValues };
 
   // Populate file folders
   submission.fileFolders.forEach((item) => {
@@ -78,7 +105,15 @@ const populateFromSubmission = (
     }
   });
 
-  return { fileFolderValues };
+  // Populate registers
+  submission.registers.forEach((item) => {
+    // Check if it belongs to a register category or Additional
+    if (registerValues[item.division] && registerValues[item.division][item.name] !== undefined) {
+      registerValues[item.division][item.name] = item.quantity;
+    }
+  });
+
+  return { fileFolderValues, registerValues };
 };
 
 const calculateTotal = (values: CategoryValues): number => {
@@ -107,7 +142,7 @@ interface RequirementsFormProps {
   onSubmitted?: () => void;
 }
 
-const RequirementsForm: React.FC<RequirementsFormProps> = ({
+const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   editMode = false,
   submissionId,
   initialSubmission = null,
@@ -125,22 +160,29 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
 
   const userStation = user?.station || '';
 
+  // Step management: 1 = File Folders, 2 = Registers
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+
   const [formData, setFormData] = useState<FormData>({
     station: userStation,
     status: 'draft',
   });
 
   // Initialize state based on whether we're in edit mode
-  const getInitialValues = (): { fileFolderValues: CategoryValues } => {
+  const getInitialValues = (): { fileFolderValues: CategoryValues; registerValues: CategoryValues } => {
     if (editMode && (initialSubmission || currentSubmission)) {
       const submission = initialSubmission || currentSubmission;
       return populateFromSubmission(submission);
     }
-    return { fileFolderValues: buildInitialValues() };
+    return { 
+      fileFolderValues: buildInitialFileFolderValues(),
+      registerValues: buildInitialRegisterValues()
+    };
   };
 
   const initialValues = getInitialValues();
   const [fileFolderValues, setFileFolderValues] = useState<CategoryValues>(initialValues.fileFolderValues);
+  const [registerValues, setRegisterValues] = useState<CategoryValues>(initialValues.registerValues);
 
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -148,7 +190,6 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
   const [isEditing, setIsEditing] = useState(editMode);
 
   // Sync form state from initialSubmission/currentSubmission during render
-  // (avoids the cascading-render setState-in-effect pattern)
   const [syncedId, setSyncedId] = useState<string | undefined>(
     editMode ? submissionId : undefined
   );
@@ -161,8 +202,9 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
         station: submission.station,
         status: submission.status,
       });
-      const { fileFolderValues: ffValues } = populateFromSubmission(submission);
+      const { fileFolderValues: ffValues, registerValues: regValues } = populateFromSubmission(submission);
       setFileFolderValues(ffValues);
+      setRegisterValues(regValues);
       setIsEditing(true);
     }
   }
@@ -189,6 +231,13 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
     }));
   };
 
+  const handleRegisterChange = (division: string, name: string, value: number): void => {
+    setRegisterValues((prev) => ({
+      ...prev,
+      [division]: { ...prev[division], [name]: Math.max(0, value) },
+    }));
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -206,9 +255,19 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
     return {
       station: formData.station,
       fileFolders: collectItems(fileFolderValues),
-      registers: [], // Registers section removed — always submitted empty
+      registers: collectItems(registerValues),
       status: formData.status,
     };
+  };
+
+  const handleNextStep = (): void => {
+    setCurrentStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePrevStep = (): void => {
+    setCurrentStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSaveDraft = async (): Promise<void> => {
@@ -229,14 +288,15 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
     }
 
     const data = collectData();
-    const hasItems = data.fileFolders.length > 0;
+    const hasFileItems = data.fileFolders.length > 0;
+    const hasRegisterItems = data.registers.length > 0;
+    const hasItems = hasFileItems || hasRegisterItems;
 
     if (!hasItems) {
-      setErrorMessage('Enter at least one quantity greater than 0.');
+      setErrorMessage('Enter at least one quantity greater than 0 in either File Folders or Registers.');
       return;
     }
 
-    // If submitting (not draft), validate there are items
     if (status === 'submitted' && !hasItems) {
       setErrorMessage('Please add at least one item before submitting.');
       return;
@@ -245,6 +305,7 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
     console.log(`📤 ${status === 'draft' ? 'Saving draft' : 'Submitting'} station requirements:`, {
       station: data.station,
       fileFolders: data.fileFolders,
+      registers: data.registers,
       status,
     });
 
@@ -252,8 +313,7 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
       let result;
 
       if (isEditing && submissionId) {
-        // Update existing submission - you'd need to add updateSubmission thunk
-        // result = await dispatch(updateSubmission({ id: submissionId, ...data })).unwrap();
+        // Update existing submission
         setSuccessMessage('Submission updated successfully!');
       } else {
         // Create new submission
@@ -269,10 +329,11 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
 
       setShowSuccess(true);
 
-      // Only reset form if not editing and it's a draft (not submitted)
       if (!isEditing) {
-        setFileFolderValues(buildInitialValues());
+        setFileFolderValues(buildInitialFileFolderValues());
+        setRegisterValues(buildInitialRegisterValues());
         setFormData(prev => ({ ...prev, status: 'draft' }));
+        setCurrentStep(1);
       }
 
       setTimeout(() => {
@@ -295,7 +356,9 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
     onChange: (division: string, name: string, value: number) => void,
     prefix: string,
     total: number,
-    title: string
+    title: string,
+    categories: Record<string, string[]>,
+    showCodeAndColor: boolean = true
   ): React.ReactElement => {
     return (
       <div className="space-y-4">
@@ -306,21 +369,21 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
 
         {/* Column header */}
         <div className="hidden md:flex items-center px-4 py-2 text-xs uppercase tracking-wider text-gray-500 font-semibold">
-          <div className="flex-1">Case Category</div>
-          <div className="w-32 text-center">Case Code</div>
-          <div className="w-32 text-center">Colour</div>
+          <div className="flex-1">Category</div>
+          {showCodeAndColor && <div className="w-32 text-center">Case Code</div>}
+          {showCodeAndColor && <div className="w-32 text-center">Colour</div>}
           <div className="w-24 text-right">Quantity</div>
         </div>
 
-        {Object.entries(CASE_CATEGORIES).map(([division, items]) => (
+        {Object.entries(categories).map(([division, items]) => (
           <div key={division} className="border border-gray-200 rounded-lg overflow-hidden">
             <div className="bg-emerald-100 px-4 py-2 font-semibold text-sm text-gray-800 uppercase">
               {division}
             </div>
             {items.map((item) => {
               const key = `${prefix}_${division}_${item}`;
-              const code = getCaseCode(division, item);
-              const colorName = getCaseColor(division, item);
+              const code = showCodeAndColor ? getCaseCode(division, item) : undefined;
+              const colorName = showCodeAndColor ? getCaseColor(division, item) : undefined;
               return (
                 <div
                   key={key}
@@ -329,17 +392,21 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
                   <label htmlFor={key} className="flex-1 min-w-[140px] text-sm">
                     {item}
                   </label>
-                  <div className="w-32 text-center text-xs font-mono text-gray-600">
-                    {code || '—'}
-                  </div>
-                  <div className="w-32 flex items-center justify-center gap-2">
-                    <span
-                      className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300 shrink-0"
-                      style={{ backgroundColor: getColorHex(colorName) }}
-                      title={colorName || 'Unknown'}
-                    />
-                    <span className="text-xs text-gray-600 truncate">{colorName || '—'}</span>
-                  </div>
+                  {showCodeAndColor && (
+                    <div className="w-32 text-center text-xs font-mono text-gray-600">
+                      {code || '—'}
+                    </div>
+                  )}
+                  {showCodeAndColor && (
+                    <div className="w-32 flex items-center justify-center gap-2">
+                      <span
+                        className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300 shrink-0"
+                        style={{ backgroundColor: getColorHex(colorName) }}
+                        title={colorName || 'Unknown'}
+                      />
+                      <span className="text-xs text-gray-600 truncate">{colorName || '—'}</span>
+                    </div>
+                  )}
                   <input
                     id={key}
                     type="number"
@@ -387,7 +454,8 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
   }
 
   const fileFoldersTotal = calculateTotal(fileFolderValues);
-  const totalItems = fileFoldersTotal;
+  const registersTotal = calculateTotal(registerValues);
+  const totalItems = fileFoldersTotal + registersTotal;
 
   return (
     <div className="min-h-screen bg-[#f7f5f0] py-8">
@@ -398,8 +466,17 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
             Data Collection · Ref RHC/DSCM/112
           </div>
           <h1 className="text-2xl font-semibold mb-2">
-            {isEditing ? 'Edit' : 'File Folders'} — Station Requirement Form
+            {isEditing ? 'Edit' : 'Station Requirement Form'}
           </h1>
+          <div className="flex items-center gap-4 mt-2">
+            <span className="text-sm text-[#c9b98a]">
+              Step {currentStep} of 2: {currentStep === 1 ? 'File Folders' : 'Registers'}
+            </span>
+            <div className="flex gap-2">
+              <div className={`w-3 h-3 rounded-full ${currentStep === 1 ? 'bg-[#a3782e]' : 'bg-gray-500'}`} />
+              <div className={`w-3 h-3 rounded-full ${currentStep === 2 ? 'bg-[#a3782e]' : 'bg-gray-500'}`} />
+            </div>
+          </div>
           {isEditing && (
             <div className="mt-2 text-sm text-[#c9b98a]">
               Editing submission for {currentSubmission?.station || initialSubmission?.station}
@@ -413,14 +490,14 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
           <p>
             To facilitate effective planning and ensure adequate provision of registry supplies, we
             request Your Honours to indicate your station/sub-registry&rsquo;s <strong>ANNUAL</strong> requirements
-            for file folders.
+            for file folders and case registers.
           </p>
           <p>
-            Kindly indicate the required quantity for each category of folders, based on
+            Kindly indicate the required quantity for each category, based on
             the number and nature of cases filed at your station/division/sub-registry.
           </p>
           <p>
-            Please indicate &ldquo;0&rdquo; where a particular folder is not applicable to your
+            Please indicate &ldquo;0&rdquo; where a particular item is not applicable to your
             station/division/sub-registry.
           </p>
           <p>
@@ -466,14 +543,53 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
           </div>
         </div>
 
-        {/* File Folders Section */}
-        <div className="mb-8">
-          {renderCategorySection(
-            fileFolderValues,
-            handleFileFolderChange,
-            'ff',
-            fileFoldersTotal,
-            'File Folders Needed'
+        {/* Step 1: File Folders */}
+        {currentStep === 1 && (
+          <div className="mb-8">
+            {renderCategorySection(
+              fileFolderValues,
+              handleFileFolderChange,
+              'ff',
+              fileFoldersTotal,
+              'File Folders Needed',
+              CASE_CATEGORIES,
+              true // show code and color
+            )}
+          </div>
+        )}
+
+        {/* Step 2: Registers */}
+        {currentStep === 2 && (
+          <div className="mb-8">
+            {renderCategorySection(
+              registerValues,
+              handleRegisterChange,
+              'reg',
+              registersTotal,
+              'Case Registers Needed',
+              { ...CASE_REGISTERS, Additional: ADDITIONAL_REGISTERS as unknown as string[] },
+              false // don't show code and color for registers
+            )}
+          </div>
+        )}
+
+        {/* Navigation Buttons */}
+        <div className="flex justify-between items-center mb-6">
+          {currentStep === 2 && (
+            <button
+              onClick={handlePrevStep}
+              className="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-md hover:bg-gray-400 transition-colors"
+            >
+              ← Previous (File Folders)
+            </button>
+          )}
+          {currentStep === 1 && (
+            <button
+              onClick={handleNextStep}
+              className="px-6 py-2 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors ml-auto"
+            >
+              Next (Registers) →
+            </button>
           )}
         </div>
 
@@ -515,10 +631,14 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
         {/* Summary */}
         <div className="mt-8 bg-white border border-gray-300 rounded-lg p-6">
           <h3 className="font-semibold text-gray-800 mb-2">Summary</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-gray-600">File Folders:</span>
               <span className="ml-2 font-semibold">{fileFoldersTotal}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Registers:</span>
+              <span className="ml-2 font-semibold">{registersTotal}</span>
             </div>
             <div>
               <span className="text-gray-600">Total Items:</span>
@@ -539,4 +659,4 @@ const RequirementsForm: React.FC<RequirementsFormProps> = ({
   );
 };
 
-export default RequirementsForm;
+export default DrRequirementsForm;

@@ -1,192 +1,272 @@
-import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
-import axios from 'axios';
-import axiosClient from '../../api/api';
+import {
+  createSlice,
+  createAsyncThunk,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
+import axios from "axios";
+import axiosClient from "../../api/api";
 
 // --- CATEGORY DEFINITIONS ---
 // Updated to match official case categories from the court document
 export const CASE_CATEGORIES: Record<string, string[]> = {
-  'Criminal': [
-    'Murder',
-    'Applications',
-    'Appeals',
-    'Court Martial',
-    'Revisions',
-    '2nd Appeals'
+  Criminal: [
+    "Murder",
+    "Applications",
+    "Appeals",
+    "Court Martial",
+    "Revisions",
+    "2nd Appeals",
   ],
-  'Anti-Corruption & Economic Crimes': [
-    'Appeals',
-    'Judicial Review',
-    'Suit',
-    'Revision',
-    'Miscellaneous',
-    'Petitions'
+  "Anti-Corruption & Economic Crimes": [
+    "Appeals",
+    "Judicial Review",
+    "Suit",
+    "Revision",
+    "Miscellaneous",
+    "Petitions",
   ],
-  'Commercial & Tax': [
-    'Commercial Civil Matters',
-    'Commercial Miscellaneous',
-    'Insolvency Cause',
-    'Insolvency Petition',
-    'Income Tax Appeal',
-    'Insolvency Notice',
-    'Commercial Appeal',
-    'Commercial Petitions',
-    'Arbitration'
+  "Commercial & Tax": [
+    "Commercial Civil Matters",
+    "Commercial Miscellaneous",
+    "Insolvency Cause",
+    "Insolvency Petition",
+    "Income Tax Appeal",
+    "Insolvency Notice",
+    "Commercial Appeal",
+    "Commercial Petitions",
+    "Arbitration",
   ],
-  'Admiralty': [
-    'Admiralty'
+  Admiralty: ["Admiralty"],
+  Civil: [
+    "High Court Civil",
+    "High Court Civil Miscellaneous",
+    "High Court Civil Appeals/Applications",
   ],
-  'Civil': [
-    'High Court Civil',
-    'High Court Civil Miscellaneous',
-    'High Court Civil Appeals/Applications'
+  Family: [
+    "Family Appeals",
+    "Family Miscellaneous Applications",
+    "Probate & Administration",
+    "Divorce",
+    "Adoption",
+    "Matrimonial Properties",
   ],
-  'Family': [
-    'Family Appeals',
-    'Family Miscellaneous Applications',
-    'Probate & Administration',
-    'Divorce',
-    'Adoption',
-    'Matrimonial Properties'
+  "Judicial Review": ["Judicial Review", "Judicial Review Miscellaneous"],
+  "Constitutional & Human Rights": [
+    "Constitutional & Human Rights Petition",
+    "Petition",
+    "Miscellaneous Petition",
+    "Election Appeal",
+    "Miscellaneous Election Appeal",
+    "Election Petition",
   ],
-  'Judicial Review': [
-    'Judicial Review',
-    'Judicial Review Miscellaneous'
-  ],
-  'Constitutional & Human Rights': [
-    'Constitutional & Human Rights Petition',
-    'Petition',
-    'Miscellaneous Petition',
-    'Election Appeal',
-    'Miscellaneous Election Appeal',
-    'Election Petition'
-  ]
 };
+
+// --- REGISTER CATEGORY DEFINITIONS ---
+export const CASE_REGISTERS: Record<string, string[]> = {
+  // A. CRIMINAL CASE REGISTERS
+  Criminal: [
+    "Criminal Application/Murder Case Register",
+    "Criminal Miscellaneous Application Case Register",
+    "Criminal Revision Case Register",
+    "Criminal Appeal Case Register",
+  ],
+
+  // B. ANTI-CORRUPTION & ECONOMIC CRIMES CASE REGISTERS
+  "Anti-Corruption & Economic Crimes": [
+    "Anti-Corruption and Economic Crimes Suits Case Register",
+    "Anti-Corruption and Economic Crimes Petition Case Register",
+    "Anti-Corruption and Economic Crimes Appeals Case Register",
+    "Anti-Corruption and Economic Crimes Revision Case Register",
+    "Anti-Corruption and Economic Crimes Miscellaneous Case Register",
+  ],
+
+  // C. CIVIL CASE REGISTERS
+  Civil: [
+    "Civil Case Register",
+    "Civil Appeals Case Register",
+    "Miscellaneous Civil Application Case Register",
+  ],
+
+  // D. COMMERCIAL CASE REGISTERS
+  "Commercial & Tax": [
+    "Commercial Suits Case Register",
+    "Commercial Miscellaneous Case Register",
+    "Commercial Appeal Case Register",
+    "Income Tax Appeals Case Register",
+    "Insolvency Notices Case Register",
+    "Insolvency Case Register",
+    "Insolvency Petition Case Register",
+    "Arbitration Case Register",
+    "Admiralty Case Register",
+  ],
+
+  // E. CONSTITUTIONAL & HUMAN RIGHTS CASE REGISTERS
+  "Constitutional & Human Rights": [
+    "Constitutional & Human Rights Petition Case Register",
+    "Constitutional & Human Rights Miscellaneous Case Register",
+  ],
+
+  // F. JUDICIAL REVIEW CASE REGISTERS
+  "Judicial Review": [
+    "Judicial Review Case Register",
+    "Judicial Review Miscellaneous Application Case Register",
+  ],
+
+  // G. FAMILY CASE REGISTERS
+  Family: [
+    "Family Civil Case Register",
+    "Probate and Administration Case Register",
+    "Matrimonial Properties Case Register",
+    "Adoption Case Register",
+    "Family Appeals Case Register",
+    "Family Miscellaneous Case Register",
+    "Divorce Case Register",
+  ],
+};
+
+// --- ADDITIONAL REGISTERS ---
+export const ADDITIONAL_REGISTERS = [
+  "File Movement Register",
+  "Accession Register",
+  "Missing File Register",
+  "Exhibit Register",
+  "Court Assistants Exhibit Register",
+  "Tracking Register for High Court Appeal Pending Due to Lack of Lower Court Record",
+  "Tracking Registers for Appeals to Court of Appeal",
+] as const;
 
 // --- CASE CODES ---
 // Using unique keys with category prefix to avoid duplicates
 export const CASE_CODES: Record<string, string> = {
   // Criminal
-  'Criminal_Murder': 'HC.CR.C.',
-  'Criminal_Applications': 'HC.MISC.CR.APPL',
-  'Criminal_Appeals': 'HC.CR.A.',
-  'Criminal_Court Martial': 'HCCMA',
-  'Criminal_Revisions': 'HC.CR.REV',
-  'Criminal_2nd Appeals': 'K.C.A',
-  
+  Criminal_Murder: "HC.CR.C.",
+  Criminal_Applications: "HC.MISC.CR.APPL",
+  Criminal_Appeals: "HC.CR.A.",
+  "Criminal_Court Martial": "HCCMA",
+  Criminal_Revisions: "HC.CR.REV",
+  "Criminal_2nd Appeals": "K.C.A",
+
   // Anti-Corruption & Economic Crimes
-  'Anti-Corruption & Economic Crimes_Appeals': 'HCACECA',
-  'Anti-Corruption & Economic Crimes_Judicial Review': 'HCACEC JR',
-  'Anti-Corruption & Economic Crimes_Suit': 'HCACECS',
-  'Anti-Corruption & Economic Crimes_Revision': 'HCACECR',
-  'Anti-Corruption & Economic Crimes_Miscellaneous': 'HCACEMISC',
-  'Anti-Corruption & Economic Crimes_Petitions': 'HCACEC PETITION',
-  
+  "Anti-Corruption & Economic Crimes_Appeals": "HCACECA",
+  "Anti-Corruption & Economic Crimes_Judicial Review": "HCACEC JR",
+  "Anti-Corruption & Economic Crimes_Suit": "HCACECS",
+  "Anti-Corruption & Economic Crimes_Revision": "HCACECR",
+  "Anti-Corruption & Economic Crimes_Miscellaneous": "HCACEMISC",
+  "Anti-Corruption & Economic Crimes_Petitions": "HCACEC PETITION",
+
   // Commercial & Tax
-  'Commercial & Tax_Commercial Civil Matters': 'HCCOMM',
-  'Commercial & Tax_Commercial Miscellaneous': 'HCCOMMMISC',
-  'Commercial & Tax_Insolvency Cause': 'HCCOMMIC',
-  'Commercial & Tax_Insolvency Petition': 'HCCOMMIP',
-  'Commercial & Tax_Income Tax Appeal': 'HCCOMMITA',
-  'Commercial & Tax_Insolvency Notice': 'HCCOMMIN',
-  'Commercial & Tax_Commercial Appeal': 'HCCCOMMA',
-  'Commercial & Tax_Commercial Petitions': 'HCCOMMPET',
-  'Commercial & Tax_Arbitration': 'HCCOMMARB',
-  
+  "Commercial & Tax_Commercial Civil Matters": "HCCOMM",
+  "Commercial & Tax_Commercial Miscellaneous": "HCCOMMMISC",
+  "Commercial & Tax_Insolvency Cause": "HCCOMMIC",
+  "Commercial & Tax_Insolvency Petition": "HCCOMMIP",
+  "Commercial & Tax_Income Tax Appeal": "HCCOMMITA",
+  "Commercial & Tax_Insolvency Notice": "HCCOMMIN",
+  "Commercial & Tax_Commercial Appeal": "HCCCOMMA",
+  "Commercial & Tax_Commercial Petitions": "HCCOMMPET",
+  "Commercial & Tax_Arbitration": "HCCOMMARB",
+
   // Admiralty
-  'Admiralty_Admiralty': 'HCCOMMADMIR',
-  
+  Admiralty_Admiralty: "HCCOMMADMIR",
+
   // Civil
-  'Civil_High Court Civil': 'HCCC',
-  'Civil_High Court Civil Miscellaneous': 'HCCC Misc.',
-  'Civil_High Court Civil Appeals/Applications': 'HCCA',
-  
+  "Civil_High Court Civil": "HCCC",
+  "Civil_High Court Civil Miscellaneous": "HCCC Misc.",
+  "Civil_High Court Civil Appeals/Applications": "HCCA",
+
   // Family
-  'Family_Family Appeals': 'HCFA',
-  'Family_Family Miscellaneous Applications': 'HCFMISC',
-  'Family_Probate & Administration': 'HCFP & A',
-  'Family_Divorce': 'HCFDC',
-  'Family_Adoption': 'HCFADOP',
-  'Family_Matrimonial Properties': 'HCFOS',
-  
+  "Family_Family Appeals": "HCFA",
+  "Family_Family Miscellaneous Applications": "HCFMISC",
+  "Family_Probate & Administration": "HCFP & A",
+  Family_Divorce: "HCFDC",
+  Family_Adoption: "HCFADOP",
+  "Family_Matrimonial Properties": "HCFOS",
+
   // Judicial Review
-  'Judicial Review_Judicial Review': 'HCJR',
-  'Judicial Review_Judicial Review Miscellaneous': 'HCJRMISC',
-  
+  "Judicial Review_Judicial Review": "HCJR",
+  "Judicial Review_Judicial Review Miscellaneous": "HCJRMISC",
+
   // Constitutional & Human Rights
-  'Constitutional & Human Rights_Constitutional & Human Rights Petition': 'CHR',
-  'Constitutional & Human Rights_Petition': 'HCCHRPET',
-  'Constitutional & Human Rights_Miscellaneous Petition': 'HCCCHRPETMISC',
-  'Constitutional & Human Rights_Election Appeal': 'HCCHREPA',
-  'Constitutional & Human Rights_Miscellaneous Election Appeal': 'HCCHRMEPA',
-  'Constitutional & Human Rights_Election Petition': 'HCCHREP'
+  "Constitutional & Human Rights_Constitutional & Human Rights Petition": "CHR",
+  "Constitutional & Human Rights_Petition": "HCCHRPET",
+  "Constitutional & Human Rights_Miscellaneous Petition": "HCCCHRPETMISC",
+  "Constitutional & Human Rights_Election Appeal": "HCCHREPA",
+  "Constitutional & Human Rights_Miscellaneous Election Appeal": "HCCHRMEPA",
+  "Constitutional & Human Rights_Election Petition": "HCCHREP",
 };
 
 // --- CASE COLORS ---
 // Using unique keys with category prefix to avoid duplicates
 export const CASE_COLORS: Record<string, string> = {
   // Criminal
-  'Criminal_Murder': 'Dark Purple',
-  'Criminal_Applications': 'Light Yellow',
-  'Criminal_Appeals': 'Red',
-  'Criminal_Court Martial': 'Red',
-  'Criminal_Revisions': 'Sky Blue',
-  'Criminal_2nd Appeals': 'Dark Pink',
-  
+  Criminal_Murder: "Dark Purple",
+  Criminal_Applications: "Light Yellow",
+  Criminal_Appeals: "Red",
+  "Criminal_Court Martial": "Red",
+  Criminal_Revisions: "Sky Blue",
+  "Criminal_2nd Appeals": "Dark Pink",
+
   // Anti-Corruption & Economic Crimes
-  'Anti-Corruption & Economic Crimes_Appeals': 'Blue',
-  'Anti-Corruption & Economic Crimes_Judicial Review': 'Dark Green',
-  'Anti-Corruption & Economic Crimes_Suit': 'Maroon',
-  'Anti-Corruption & Economic Crimes_Revision': 'Neon Green',
-  'Anti-Corruption & Economic Crimes_Miscellaneous': 'Orange',
-  'Anti-Corruption & Economic Crimes_Petitions': 'Red',
-  
+  "Anti-Corruption & Economic Crimes_Appeals": "Blue",
+  "Anti-Corruption & Economic Crimes_Judicial Review": "Dark Green",
+  "Anti-Corruption & Economic Crimes_Suit": "Maroon",
+  "Anti-Corruption & Economic Crimes_Revision": "Neon Green",
+  "Anti-Corruption & Economic Crimes_Miscellaneous": "Orange",
+  "Anti-Corruption & Economic Crimes_Petitions": "Red",
+
   // Commercial & Tax
-  'Commercial & Tax_Commercial Civil Matters': 'Light Purple',
-  'Commercial & Tax_Commercial Miscellaneous': 'Light Purple',
-  'Commercial & Tax_Insolvency Cause': 'Light Purple',
-  'Commercial & Tax_Insolvency Petition': 'Light Purple',
-  'Commercial & Tax_Income Tax Appeal': 'Light Purple',
-  'Commercial & Tax_Insolvency Notice': 'Light Purple',
-  'Commercial & Tax_Commercial Appeal': 'Light Purple',
-  'Commercial & Tax_Commercial Petitions': 'Light Purple',
-  'Commercial & Tax_Arbitration': 'Light Purple',
-  
+  "Commercial & Tax_Commercial Civil Matters": "Light Purple",
+  "Commercial & Tax_Commercial Miscellaneous": "Light Purple",
+  "Commercial & Tax_Insolvency Cause": "Light Purple",
+  "Commercial & Tax_Insolvency Petition": "Light Purple",
+  "Commercial & Tax_Income Tax Appeal": "Light Purple",
+  "Commercial & Tax_Insolvency Notice": "Light Purple",
+  "Commercial & Tax_Commercial Appeal": "Light Purple",
+  "Commercial & Tax_Commercial Petitions": "Light Purple",
+  "Commercial & Tax_Arbitration": "Light Purple",
+
   // Admiralty
-  'Admiralty_Admiralty': 'Sky Blue',
-  
+  Admiralty_Admiralty: "Sky Blue",
+
   // Civil
-  'Civil_High Court Civil': 'Orange',
-  'Civil_High Court Civil Miscellaneous': 'Orange',
-  'Civil_High Court Civil Appeals/Applications': 'Grey',
-  
+  "Civil_High Court Civil": "Orange",
+  "Civil_High Court Civil Miscellaneous": "Orange",
+  "Civil_High Court Civil Appeals/Applications": "Grey",
+
   // Family
-  'Family_Family Appeals': 'Grey',
-  'Family_Family Miscellaneous Applications': 'Yellow',
-  'Family_Probate & Administration': 'Pink',
-  'Family_Divorce': 'Purple',
-  'Family_Adoption': 'Cream',
-  'Family_Matrimonial Properties': 'Yellow',
-  
+  "Family_Family Appeals": "Grey",
+  "Family_Family Miscellaneous Applications": "Yellow",
+  "Family_Probate & Administration": "Pink",
+  Family_Divorce: "Purple",
+  Family_Adoption: "Cream",
+  "Family_Matrimonial Properties": "Yellow",
+
   // Judicial Review
-  'Judicial Review_Judicial Review': 'Dark Green',
-  'Judicial Review_Judicial Review Miscellaneous': 'Dark Green',
-  
+  "Judicial Review_Judicial Review": "Dark Green",
+  "Judicial Review_Judicial Review Miscellaneous": "Dark Green",
+
   // Constitutional & Human Rights
-  'Constitutional & Human Rights_Constitutional & Human Rights Petition': 'Light Green',
-  'Constitutional & Human Rights_Petition': 'Light Green',
-  'Constitutional & Human Rights_Miscellaneous Petition': 'Light Green',
-  'Constitutional & Human Rights_Election Appeal': 'Light Green',
-  'Constitutional & Human Rights_Miscellaneous Election Appeal': 'Light Green',
-  'Constitutional & Human Rights_Election Petition': 'Light Green'
+  "Constitutional & Human Rights_Constitutional & Human Rights Petition":
+    "Light Green",
+  "Constitutional & Human Rights_Petition": "Light Green",
+  "Constitutional & Human Rights_Miscellaneous Petition": "Light Green",
+  "Constitutional & Human Rights_Election Appeal": "Light Green",
+  "Constitutional & Human Rights_Miscellaneous Election Appeal": "Light Green",
+  "Constitutional & Human Rights_Election Petition": "Light Green",
 };
 
 // --- HELPER FUNCTIONS ---
-export const getCaseCode = (category: string, caseName: string): string | undefined => {
+export const getCaseCode = (
+  category: string,
+  caseName: string,
+): string | undefined => {
   const key = `${category}_${caseName}`;
   return CASE_CODES[key];
 };
 
-export const getCaseColor = (category: string, caseName: string): string | undefined => {
+export const getCaseColor = (
+  category: string,
+  caseName: string,
+): string | undefined => {
   const key = `${category}_${caseName}`;
   return CASE_COLORS[key];
 };
@@ -206,6 +286,57 @@ export const getAllValidCases = (): { category: string; names: string[] }[] => {
   }));
 };
 
+// --- REGISTER HELPER FUNCTIONS ---
+export const getValidRegisterCategories = (): string[] => {
+  return [...Object.keys(CASE_REGISTERS), "Additional"];
+};
+
+export const getValidRegisterNamesForCategory = (
+  category: string,
+): string[] => {
+  if (category === "Additional") {
+    return [...ADDITIONAL_REGISTERS];
+  }
+  return CASE_REGISTERS[category] || [];
+};
+
+export const getAllValidRegisters = (): {
+  category: string;
+  names: string[];
+}[] => {
+  const result: { category: string; names: string[] }[] = [];
+
+  for (const category of Object.keys(CASE_REGISTERS)) {
+    result.push({
+      category,
+      names: CASE_REGISTERS[category],
+    });
+  }
+
+  result.push({
+    category: "Additional",
+    names: [...ADDITIONAL_REGISTERS],
+  });
+
+  return result;
+};
+
+export const getAllRegistersFlat = (): { category: string; name: string }[] => {
+  const result: { category: string; name: string }[] = [];
+
+  for (const category of Object.keys(CASE_REGISTERS)) {
+    for (const name of CASE_REGISTERS[category]) {
+      result.push({ category, name });
+    }
+  }
+
+  for (const name of ADDITIONAL_REGISTERS) {
+    result.push({ category: "Additional", name });
+  }
+
+  return result;
+};
+
 // --- CASE LOOKUP FUNCTIONS ---
 export const getCaseInfo = (category: string, caseName: string) => {
   const code = getCaseCode(category, caseName);
@@ -220,8 +351,8 @@ export interface StationRequirementItem {
   quantity: number;
 }
 
-export type SubmissionStatus = 'draft' | 'submitted';
-export type ReviewStatus = 'pending' | 'approved' | 'needs_revision';
+export type SubmissionStatus = "draft" | "submitted";
+export type ReviewStatus = "pending" | "approved" | "needs_revision";
 
 export interface StationRequirementSubmission {
   id?: string;
@@ -303,7 +434,13 @@ export interface AdminDashboardStats {
   recentActivity: Array<{
     id: string;
     station: string;
-    action: 'submitted' | 'approved' | 'updated' | 'created' | 'reviewed' | 'rejected';
+    action:
+      | "submitted"
+      | "approved"
+      | "updated"
+      | "created"
+      | "reviewed"
+      | "rejected";
     timestamp: string;
     user: string;
     details?: string;
@@ -328,6 +465,8 @@ interface StationRequirementsState {
   totals: SubmissionTotals | null;
   stations: string[];
   categories: { category: string; names: string[] }[];
+  registerCategories: { category: string; names: string[] }[];
+  registers: { category: string; name: string }[];
   report: StationReport | null;
   dashboardStats: AdminDashboardStats | null;
   reviewQueue: AdminReviewQueue | null;
@@ -348,6 +487,8 @@ const initialState: StationRequirementsState = {
   totals: null,
   stations: [],
   categories: getAllValidCases(),
+  registerCategories: getAllValidRegisters(),
+  registers: getAllRegistersFlat(),
   report: null,
   dashboardStats: null,
   reviewQueue: null,
@@ -374,102 +515,129 @@ export const createSubmission = createAsyncThunk<
     status?: SubmissionStatus;
   },
   { rejectValue: string }
->('stationRequirements/createSubmission', async (payload, { rejectWithValue }) => {
-  try {
-    const status = payload.status || 'draft';
-    console.log(`📤 Creating ${status} submission:`, {
-      station: payload.station,
-      fileFoldersCount: payload.fileFolders.length,
-      registersCount: payload.registers.length,
-      status,
-    });
+>(
+  "stationRequirements/createSubmission",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const status = payload.status || "draft";
+      console.log(`📤 Creating ${status} submission:`, {
+        station: payload.station,
+        fileFoldersCount: payload.fileFolders.length,
+        registersCount: payload.registers.length,
+        status,
+      });
 
-    const response = await axiosClient.post('/station-requirements', payload);
-    
-    console.log('✅ Submission created:', {
-      id: response.data.data.submission.id,
-      station: response.data.data.submission.station,
-      status: response.data.data.submission.status,
-    });
-    
-    return response.data.data;
-  } catch (err: unknown) {
-    console.error('❌ Failed to create submission:', err);
-    
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to create submission.'
-      );
+      const response = await axiosClient.post("/station-requirements", payload);
+
+      console.log("✅ Submission created:", {
+        id: response.data.data.submission.id,
+        station: response.data.data.submission.station,
+        status: response.data.data.submission.status,
+      });
+
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to create submission:", err);
+
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to create submission.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
     }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
+  },
+);
 
 // Submit a draft
 export const submitDraft = createAsyncThunk<
   { submission: StationRequirementSubmission },
   { id: string; sendEmail?: boolean },
   { rejectValue: string }
->('stationRequirements/submitDraft', async ({ id, sendEmail = true }, { rejectWithValue }) => {
-  try {
-    console.log('📤 Submitting draft:', { id, sendEmail });
+>(
+  "stationRequirements/submitDraft",
+  async ({ id, sendEmail = true }, { rejectWithValue }) => {
+    try {
+      console.log("📤 Submitting draft:", { id, sendEmail });
 
-    const response = await axiosClient.post(`/station-requirements/${id}/submit`, { sendEmail });
-    
-    console.log('✅ Draft submitted:', {
-      id: response.data.data.submission.id,
-      station: response.data.data.submission.station,
-      submittedAt: response.data.data.submission.submittedAt,
-    });
-    
-    return response.data.data;
-  } catch (err: unknown) {
-    console.error('❌ Failed to submit draft:', err);
-    
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to submit draft.'
+      const response = await axiosClient.post(
+        `/station-requirements/${id}/submit`,
+        { sendEmail },
       );
+
+      console.log("✅ Draft submitted:", {
+        id: response.data.data.submission.id,
+        station: response.data.data.submission.station,
+        submittedAt: response.data.data.submission.submittedAt,
+      });
+
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to submit draft:", err);
+
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to submit draft.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
     }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
+  },
+);
 
 // Admin review submission
 export const adminReviewSubmission = createAsyncThunk<
   { submission: StationRequirementSubmission },
-  { id: string; reviewStatus: ReviewStatus; adminNotes?: string; sendNotification?: boolean },
+  {
+    id: string;
+    reviewStatus: ReviewStatus;
+    adminNotes?: string;
+    sendNotification?: boolean;
+  },
   { rejectValue: string }
->('stationRequirements/adminReviewSubmission', async ({ id, reviewStatus, adminNotes, sendNotification = true }, { rejectWithValue }) => {
-  try {
-    console.log('📤 Reviewing submission:', { id, reviewStatus, adminNotes, sendNotification });
+>(
+  "stationRequirements/adminReviewSubmission",
+  async (
+    { id, reviewStatus, adminNotes, sendNotification = true },
+    { rejectWithValue },
+  ) => {
+    try {
+      console.log("📤 Reviewing submission:", {
+        id,
+        reviewStatus,
+        adminNotes,
+        sendNotification,
+      });
 
-    const response = await axiosClient.post(`/station-requirements/${id}/review`, {
-      reviewStatus,
-      adminNotes,
-      sendNotification,
-    });
-    
-    console.log('✅ Submission reviewed:', {
-      id: response.data.data.submission.id,
-      station: response.data.data.submission.station,
-      reviewStatus: response.data.data.submission.reviewStatus,
-    });
-    
-    return response.data.data;
-  } catch (err: unknown) {
-    console.error('❌ Failed to review submission:', err);
-    
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to review submission.'
+      const response = await axiosClient.post(
+        `/station-requirements/${id}/review`,
+        {
+          reviewStatus,
+          adminNotes,
+          sendNotification,
+        },
       );
-    }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
 
-// Get all submissions with filtering and pagination
+      console.log("✅ Submission reviewed:", {
+        id: response.data.data.submission.id,
+        station: response.data.data.submission.station,
+        reviewStatus: response.data.data.submission.reviewStatus,
+      });
+
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to review submission:", err);
+
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to review submission.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  },
+);
+
 // Get all submissions with filtering and pagination
 export const getSubmissions = createAsyncThunk<
   {
@@ -487,43 +655,45 @@ export const getSubmissions = createAsyncThunk<
     toDate?: string;
     page?: number;
     limit?: number;
-    sortBy?: 'updatedAt' | 'submittedAt' | 'station';
-    sortOrder?: 'asc' | 'desc';
+    sortBy?: "updatedAt" | "submittedAt" | "station";
+    sortOrder?: "asc" | "desc";
     adminView?: boolean;
   },
   { rejectValue: string }
->('stationRequirements/getSubmissions', async (params = {}, { rejectWithValue }) => {
-  try {
-    // Clean up undefined values - only include defined params
-    const cleanParams: Record<string, string | number | boolean> = {};
-    
-    // Only add params that are defined and not null
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        cleanParams[key] = value;
+>(
+  "stationRequirements/getSubmissions",
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const cleanParams: Record<string, string | number | boolean> = {};
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          cleanParams[key] = value;
+        }
+      });
+
+      if (!cleanParams.page) cleanParams.page = 1;
+      if (!cleanParams.limit) cleanParams.limit = 20;
+      if (!cleanParams.sortBy) cleanParams.sortBy = "updatedAt";
+      if (!cleanParams.sortOrder) cleanParams.sortOrder = "desc";
+
+      console.log("📤 Fetching submissions with params:", cleanParams);
+
+      const response = await axiosClient.get("/station-requirements", {
+        params: cleanParams,
+      });
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to fetch submissions:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to fetch submissions.",
+        );
       }
-    });
-
-    // Ensure page and limit have defaults if not provided
-    if (!cleanParams.page) cleanParams.page = 1;
-    if (!cleanParams.limit) cleanParams.limit = 20;
-    if (!cleanParams.sortBy) cleanParams.sortBy = 'updatedAt';
-    if (!cleanParams.sortOrder) cleanParams.sortOrder = 'desc';
-
-    console.log('📤 Fetching submissions with params:', cleanParams);
-
-    const response = await axiosClient.get('/station-requirements', { params: cleanParams });
-    return response.data.data;
-  } catch (err: unknown) {
-    console.error('❌ Failed to fetch submissions:', err);
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch submissions.'
-      );
+      return rejectWithValue("An unexpected error occurred.");
     }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
+  },
+);
 
 // Get station report (admin only)
 export const getStationReport = createAsyncThunk<
@@ -536,36 +706,41 @@ export const getStationReport = createAsyncThunk<
     limit?: number;
   },
   { rejectValue: string }
->('stationRequirements/getStationReport', async (params, { rejectWithValue }) => {
-  try {
-    const response = await axiosClient.get('/station-requirements/report', { params });
-    return response.data.data;
-  } catch (err: unknown) {
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch station report.'
-      );
+>(
+  "stationRequirements/getStationReport",
+  async (params, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.get("/station-requirements/report", {
+        params,
+      });
+      return response.data.data;
+    } catch (err: unknown) {
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to fetch station report.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
     }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
+  },
+);
 
 // Get admin dashboard stats (admin only)
 export const getAdminDashboard = createAsyncThunk<
   { stats: AdminDashboardStats },
   void,
   { rejectValue: string }
->('stationRequirements/getAdminDashboard', async (_, { rejectWithValue }) => {
+>("stationRequirements/getAdminDashboard", async (_, { rejectWithValue }) => {
   try {
-    const response = await axiosClient.get('/station-requirements/dashboard');
+    const response = await axiosClient.get("/station-requirements/dashboard");
     return response.data.data;
   } catch (err: unknown) {
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
       return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch dashboard stats.'
+        err.response?.data?.message || "Failed to fetch dashboard stats.",
       );
     }
-    return rejectWithValue('An unexpected error occurred.');
+    return rejectWithValue("An unexpected error occurred.");
   }
 });
 
@@ -574,17 +749,19 @@ export const getReviewQueue = createAsyncThunk<
   { queue: AdminReviewQueue },
   void,
   { rejectValue: string }
->('stationRequirements/getReviewQueue', async (_, { rejectWithValue }) => {
+>("stationRequirements/getReviewQueue", async (_, { rejectWithValue }) => {
   try {
-    const response = await axiosClient.get('/station-requirements/review-queue');
+    const response = await axiosClient.get(
+      "/station-requirements/review-queue",
+    );
     return response.data.data;
   } catch (err: unknown) {
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
       return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch review queue.'
+        err.response?.data?.message || "Failed to fetch review queue.",
       );
     }
-    return rejectWithValue('An unexpected error occurred.');
+    return rejectWithValue("An unexpected error occurred.");
   }
 });
 
@@ -593,17 +770,17 @@ export const getSubmissionById = createAsyncThunk<
   { submission: StationRequirementSubmission },
   string,
   { rejectValue: string }
->('stationRequirements/getSubmissionById', async (id, { rejectWithValue }) => {
+>("stationRequirements/getSubmissionById", async (id, { rejectWithValue }) => {
   try {
     const response = await axiosClient.get(`/station-requirements/${id}`);
     return response.data.data;
   } catch (err: unknown) {
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
       return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch submission.'
+        err.response?.data?.message || "Failed to fetch submission.",
       );
     }
-    return rejectWithValue('An unexpected error occurred.');
+    return rejectWithValue("An unexpected error occurred.");
   }
 });
 
@@ -620,36 +797,42 @@ export const updateSubmission = createAsyncThunk<
     adminNotes?: string;
   },
   { rejectValue: string }
->('stationRequirements/updateSubmission', async ({ id, ...payload }, { rejectWithValue }) => {
-  try {
-    const response = await axiosClient.put(`/station-requirements/${id}`, payload);
-    return response.data.data;
-  } catch (err: unknown) {
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to update submission.'
+>(
+  "stationRequirements/updateSubmission",
+  async ({ id, ...payload }, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.put(
+        `/station-requirements/${id}`,
+        payload,
       );
+      return response.data.data;
+    } catch (err: unknown) {
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to update submission.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
     }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
+  },
+);
 
 // Delete a submission
 export const deleteSubmission = createAsyncThunk<
   string,
   string,
   { rejectValue: string }
->('stationRequirements/deleteSubmission', async (id, { rejectWithValue }) => {
+>("stationRequirements/deleteSubmission", async (id, { rejectWithValue }) => {
   try {
     await axiosClient.delete(`/station-requirements/${id}`);
     return id;
   } catch (err: unknown) {
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
       return rejectWithValue(
-        err.response?.data?.message || 'Failed to delete submission.'
+        err.response?.data?.message || "Failed to delete submission.",
       );
     }
-    return rejectWithValue('An unexpected error occurred.');
+    return rejectWithValue("An unexpected error occurred.");
   }
 });
 
@@ -658,17 +841,17 @@ export const getSubmissionTotals = createAsyncThunk<
   SubmissionTotals,
   void,
   { rejectValue: string }
->('stationRequirements/getSubmissionTotals', async (_, { rejectWithValue }) => {
+>("stationRequirements/getSubmissionTotals", async (_, { rejectWithValue }) => {
   try {
-    const response = await axiosClient.get('/station-requirements/totals');
+    const response = await axiosClient.get("/station-requirements/totals");
     return response.data.data;
   } catch (err: unknown) {
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
       return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch totals.'
+        err.response?.data?.message || "Failed to fetch totals.",
       );
     }
-    return rejectWithValue('An unexpected error occurred.');
+    return rejectWithValue("An unexpected error occurred.");
   }
 });
 
@@ -677,54 +860,171 @@ export const getUniqueStations = createAsyncThunk<
   { stations: string[] },
   void,
   { rejectValue: string }
->('stationRequirements/getUniqueStations', async (_, { rejectWithValue, getState }) => {
-  try {
-    const response = await axiosClient.get('/station-requirements/stations');
-    
-    if (response.data?.data?.stations && Array.isArray(response.data.data.stations)) {
-      return { stations: response.data.data.stations };
-    }
-    
-    const state = getState() as { stationRequirements: StationRequirementsState };
-    const submissions = state.stationRequirements.submissions;
-    
-    if (submissions.length > 0) {
-      const stations = [...new Set(submissions.map(s => s.station))].sort();
-      return { stations };
-    }
-    
-    return { stations: [] };
-  } catch (err: unknown) {
+>(
+  "stationRequirements/getUniqueStations",
+  async (_, { rejectWithValue, getState }) => {
     try {
-      const state = getState() as { stationRequirements: StationRequirementsState };
+      const response = await axiosClient.get("/station-requirements/stations");
+
+      if (
+        response.data?.data?.stations &&
+        Array.isArray(response.data.data.stations)
+      ) {
+        return { stations: response.data.data.stations };
+      }
+
+      const state = getState() as {
+        stationRequirements: StationRequirementsState;
+      };
       const submissions = state.stationRequirements.submissions;
-      
+
       if (submissions.length > 0) {
-        const stations = [...new Set(submissions.map(s => s.station))].sort();
+        const stations = [...new Set(submissions.map((s) => s.station))].sort();
         return { stations };
       }
-    } catch (deriveError) {
-      console.warn('Could not derive stations from state:', deriveError);
-    }
-    
-    if (axios.isAxiosError(err) && (err.response?.status === 400 || err.response?.status === 404)) {
-      console.warn('⚠️ Stations endpoint not available, returning empty array');
+
       return { stations: [] };
+    } catch (err: unknown) {
+      try {
+        const state = getState() as {
+          stationRequirements: StationRequirementsState;
+        };
+        const submissions = state.stationRequirements.submissions;
+
+        if (submissions.length > 0) {
+          const stations = [
+            ...new Set(submissions.map((s) => s.station)),
+          ].sort();
+          return { stations };
+        }
+      } catch (deriveError) {
+        console.warn("Could not derive stations from state:", deriveError);
+      }
+
+      if (
+        axios.isAxiosError(err) &&
+        (err.response?.status === 400 || err.response?.status === 404)
+      ) {
+        console.warn(
+          "⚠️ Stations endpoint not available, returning empty array",
+        );
+        return { stations: [] };
+      }
+
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to fetch stations.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
     }
-    
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch stations.'
-      );
-    }
-    return rejectWithValue('An unexpected error occurred.');
+  },
+);
+
+// Get register categories from backend
+export const getRegisterCategories = createAsyncThunk<
+  { categories: { category: string; names: string[] }[] },
+  void,
+  { rejectValue: string }
+>("stationRequirements/getRegisterCategories", async () => {
+  try {
+    console.log("📤 Fetching register categories from backend");
+    const response = await axiosClient.get(
+      "/station-requirements/register-categories",
+    );
+    return response.data.data;
+  } catch {
+    console.warn(
+      "⚠️ Failed to fetch register categories from backend, using local data",
+    );
+    // Fallback to local data
+    return { categories: getAllValidRegisters() };
   }
 });
+
+// Get all registers (flat list) from backend
+export const getRegisters = createAsyncThunk<
+  {
+    categories: { category: string; names: string[] }[];
+    registers: { category: string; name: string }[];
+  },
+  void,
+  { rejectValue: string }
+>("stationRequirements/getRegisters", async () => {
+  try {
+    console.log("📤 Fetching registers from backend");
+    const response = await axiosClient.get("/station-requirements/registers");
+    return response.data.data;
+  } catch {
+    console.warn("⚠️ Failed to fetch registers from backend, using local data");
+    // Fallback to local data
+    return {
+      categories: getAllValidRegisters(),
+      registers: getAllRegistersFlat(),
+    };
+  }
+});
+
+export const getMySubmissions = createAsyncThunk<
+  {
+    submissions: StationRequirementSummary[];
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  },
+  {
+    station?: string;
+    status?: SubmissionStatus;
+    reviewStatus?: ReviewStatus;
+    fromDate?: string;
+    toDate?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: "updatedAt" | "submittedAt" | "station";
+    sortOrder?: "asc" | "desc";
+  },
+  { rejectValue: string }
+>(
+  "stationRequirements/getMySubmissions",
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const cleanParams: Record<string, string | number | boolean> = {};
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          cleanParams[key] = value;
+        }
+      });
+
+      if (!cleanParams.page) cleanParams.page = 1;
+      if (!cleanParams.limit) cleanParams.limit = 20;
+      if (!cleanParams.sortBy) cleanParams.sortBy = "updatedAt";
+      if (!cleanParams.sortOrder) cleanParams.sortOrder = "desc";
+
+      console.log("📤 Fetching my submissions with params:", cleanParams);
+
+      const response = await axiosClient.get(
+        "/station-requirements/my-submissions",
+        { params: cleanParams },
+      );
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to fetch your submissions:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to fetch your submissions.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  },
+);
 
 // --- SLICE ---
 
 const stationRequirementsSlice = createSlice({
-  name: 'stationRequirements',
+  name: "stationRequirements",
   initialState,
   reducers: {
     clearCurrentSubmission: (state) => {
@@ -751,7 +1051,9 @@ const stationRequirementsSlice = createSlice({
     },
     deriveStations: (state) => {
       if (state.submissions.length > 0) {
-        const stations = [...new Set(state.submissions.map(s => s.station))].sort();
+        const stations = [
+          ...new Set(state.submissions.map((s) => s.station)),
+        ].sort();
         if (stations.length > 0) {
           state.stations = stations;
         }
@@ -781,11 +1083,11 @@ const stationRequirementsSlice = createSlice({
             station: action.payload.submission.station,
             fileFoldersTotal: action.payload.submission.fileFolders.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             registersTotal: action.payload.submission.registers.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             status: action.payload.submission.status,
             updatedAt: action.payload.submission.updatedAt,
@@ -798,7 +1100,34 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(createSubmission.rejected, (state, action) => {
         state.isSubmitting = false;
-        state.error = action.payload || 'Failed to create submission';
+        state.error = action.payload || "Failed to create submission";
+      })
+
+      .addCase(getMySubmissions.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(getMySubmissions.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.submissions = action.payload.submissions;
+        state.pagination = {
+          page: action.payload.page,
+          limit: action.payload.limit,
+          total: action.payload.total,
+        };
+
+        if (state.submissions.length > 0) {
+          const stations = [
+            ...new Set(state.submissions.map((s) => s.station)),
+          ].sort();
+          if (stations.length > 0 && state.stations.length === 0) {
+            state.stations = stations;
+          }
+        }
+      })
+      .addCase(getMySubmissions.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || "Failed to fetch your submissions";
       })
 
       // --- submitDraft ---
@@ -810,7 +1139,7 @@ const stationRequirementsSlice = createSlice({
         state.isSubmitting = false;
         state.currentSubmission = action.payload.submission;
         const index = state.submissions.findIndex(
-          (s) => s.id === action.payload.submission.id
+          (s) => s.id === action.payload.submission.id,
         );
         if (index !== -1) {
           state.submissions[index] = {
@@ -818,11 +1147,11 @@ const stationRequirementsSlice = createSlice({
             station: action.payload.submission.station,
             fileFoldersTotal: action.payload.submission.fileFolders.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             registersTotal: action.payload.submission.registers.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             status: action.payload.submission.status,
             updatedAt: action.payload.submission.updatedAt,
@@ -834,7 +1163,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(submitDraft.rejected, (state, action) => {
         state.isSubmitting = false;
-        state.error = action.payload || 'Failed to submit draft';
+        state.error = action.payload || "Failed to submit draft";
       })
 
       // --- adminReviewSubmission ---
@@ -846,7 +1175,7 @@ const stationRequirementsSlice = createSlice({
         state.isReviewing = false;
         state.currentSubmission = action.payload.submission;
         const index = state.submissions.findIndex(
-          (s) => s.id === action.payload.submission.id
+          (s) => s.id === action.payload.submission.id,
         );
         if (index !== -1) {
           state.submissions[index] = {
@@ -854,11 +1183,11 @@ const stationRequirementsSlice = createSlice({
             station: action.payload.submission.station,
             fileFoldersTotal: action.payload.submission.fileFolders.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             registersTotal: action.payload.submission.registers.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             status: action.payload.submission.status,
             updatedAt: action.payload.submission.updatedAt,
@@ -867,12 +1196,10 @@ const stationRequirementsSlice = createSlice({
             reviewStatus: action.payload.submission.reviewStatus,
           };
         }
-        // Refresh review queue and dashboard after review
-        // These will be fetched separately if needed
       })
       .addCase(adminReviewSubmission.rejected, (state, action) => {
         state.isReviewing = false;
-        state.error = action.payload || 'Failed to review submission';
+        state.error = action.payload || "Failed to review submission";
       })
 
       // --- getSubmissions ---
@@ -888,9 +1215,11 @@ const stationRequirementsSlice = createSlice({
           limit: action.payload.limit,
           total: action.payload.total,
         };
-        
+
         if (state.submissions.length > 0) {
-          const stations = [...new Set(state.submissions.map(s => s.station))].sort();
+          const stations = [
+            ...new Set(state.submissions.map((s) => s.station)),
+          ].sort();
           if (stations.length > 0 && state.stations.length === 0) {
             state.stations = stations;
           }
@@ -898,7 +1227,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(getSubmissions.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || 'Failed to fetch submissions';
+        state.error = action.payload || "Failed to fetch submissions";
       })
 
       // --- getStationReport ---
@@ -912,7 +1241,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(getStationReport.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || 'Failed to fetch station report';
+        state.error = action.payload || "Failed to fetch station report";
       })
 
       // --- getAdminDashboard ---
@@ -926,7 +1255,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(getAdminDashboard.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || 'Failed to fetch dashboard stats';
+        state.error = action.payload || "Failed to fetch dashboard stats";
       })
 
       // --- getReviewQueue ---
@@ -940,7 +1269,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(getReviewQueue.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || 'Failed to fetch review queue';
+        state.error = action.payload || "Failed to fetch review queue";
       })
 
       // --- getSubmissionById ---
@@ -954,7 +1283,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(getSubmissionById.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || 'Failed to fetch submission';
+        state.error = action.payload || "Failed to fetch submission";
       })
 
       // --- updateSubmission ---
@@ -966,7 +1295,7 @@ const stationRequirementsSlice = createSlice({
         state.isSubmitting = false;
         state.currentSubmission = action.payload.submission;
         const index = state.submissions.findIndex(
-          (s) => s.id === action.payload.submission.id
+          (s) => s.id === action.payload.submission.id,
         );
         if (index !== -1) {
           state.submissions[index] = {
@@ -974,11 +1303,11 @@ const stationRequirementsSlice = createSlice({
             station: action.payload.submission.station,
             fileFoldersTotal: action.payload.submission.fileFolders.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             registersTotal: action.payload.submission.registers.reduce(
               (sum, item) => sum + item.quantity,
-              0
+              0,
             ),
             status: action.payload.submission.status,
             updatedAt: action.payload.submission.updatedAt,
@@ -990,7 +1319,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(updateSubmission.rejected, (state, action) => {
         state.isSubmitting = false;
-        state.error = action.payload || 'Failed to update submission';
+        state.error = action.payload || "Failed to update submission";
       })
 
       // --- deleteSubmission ---
@@ -1001,7 +1330,7 @@ const stationRequirementsSlice = createSlice({
       .addCase(deleteSubmission.fulfilled, (state, action) => {
         state.isLoading = false;
         state.submissions = state.submissions.filter(
-          (sub) => sub.id !== action.payload
+          (sub) => sub.id !== action.payload,
         );
         if (state.currentSubmission?.id === action.payload) {
           state.currentSubmission = null;
@@ -1009,7 +1338,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(deleteSubmission.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || 'Failed to delete submission';
+        state.error = action.payload || "Failed to delete submission";
       })
 
       // --- getSubmissionTotals ---
@@ -1023,7 +1352,7 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(getSubmissionTotals.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || 'Failed to fetch totals';
+        state.error = action.payload || "Failed to fetch totals";
       })
 
       // --- getUniqueStations ---
@@ -1034,9 +1363,11 @@ const stationRequirementsSlice = createSlice({
       .addCase(getUniqueStations.fulfilled, (state, action) => {
         state.isLoading = false;
         state.stations = action.payload.stations;
-        
+
         if (state.stations.length === 0 && state.submissions.length > 0) {
-          const stations = [...new Set(state.submissions.map(s => s.station))].sort();
+          const stations = [
+            ...new Set(state.submissions.map((s) => s.station)),
+          ].sort();
           if (stations.length > 0) {
             state.stations = stations;
           }
@@ -1044,15 +1375,40 @@ const stationRequirementsSlice = createSlice({
       })
       .addCase(getUniqueStations.rejected, (state, action) => {
         state.isLoading = false;
-        if (!action.payload?.includes('400') && !action.payload?.includes('404')) {
-          state.error = action.payload || 'Failed to fetch stations';
+        if (
+          !action.payload?.includes("400") &&
+          !action.payload?.includes("404")
+        ) {
+          state.error = action.payload || "Failed to fetch stations";
         }
         if (state.submissions.length > 0) {
-          const stations = [...new Set(state.submissions.map(s => s.station))].sort();
+          const stations = [
+            ...new Set(state.submissions.map((s) => s.station)),
+          ].sort();
           if (stations.length > 0) {
             state.stations = stations;
           }
         }
+      })
+
+      // --- getRegisterCategories ---
+      .addCase(getRegisterCategories.fulfilled, (state, action) => {
+        state.registerCategories = action.payload.categories;
+      })
+      .addCase(getRegisterCategories.rejected, (state) => {
+        // Keep local fallback data
+        state.registerCategories = getAllValidRegisters();
+      })
+
+      // --- getRegisters ---
+      .addCase(getRegisters.fulfilled, (state, action) => {
+        state.registerCategories = action.payload.categories;
+        state.registers = action.payload.registers;
+      })
+      .addCase(getRegisters.rejected, (state) => {
+        // Keep local fallback data
+        state.registerCategories = getAllValidRegisters();
+        state.registers = getAllRegistersFlat();
       });
   },
 });

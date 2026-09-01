@@ -15,6 +15,7 @@ import AdminLayout from './components/layouts/admin/AdminLayout';
 import DrRequirementsForm from './pages/dr/DrRequirementsForm';
 import AdminSubmissions from './pages/admin/AdminSubmissions';
 import AdminUsers from './pages/admin/AdminUsers';
+import DrSubmissions from './pages/dr/DrSubmissions';
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -48,6 +49,7 @@ export const App: React.FC = () => {
           <Route element={<DrLayout />}>
             <Route path="/dashboard" element={<DrDashboard />} />
             <Route path="/requirements-form" element={<DrRequirementsForm />} />
+            <Route path="/all-submissions" element={<DrSubmissions />} />
             {/* Add more DR child routes here */}
           </Route>
         </Route>

@@ -1,7 +1,9 @@
+// DrSubmissions.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  getSubmissions,
+  getMySubmissions,
   getSubmissionById,
   clearError,
   clearCurrentSubmission,
@@ -9,44 +11,38 @@ import {
   setLimit,
   resetPagination,
   type StationRequirementSummary,
-  //type GetSubmissionsQuery,
 } from '../../store/slices/stationRequirementsSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 
-// Type for the fetch params
+// Type for fetch params
 type FetchSubmissionsParams = {
   station?: string;
   page: number;
   limit: number;
   sortBy: 'updatedAt' | 'submittedAt' | 'station';
   sortOrder: 'asc' | 'desc';
-  adminView?: boolean;
 };
 
-const AdminSubmissions: React.FC = () => {
+const DrSubmissions: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { submissions, currentSubmission, isLoading, error, pagination } = useSelector(
     (state: RootState) => state.stationRequirements
   );
-  const { accessToken, isInitializing, user } = useSelector((state: RootState) => state.auth);
+  const { accessToken, isInitializing  } = useSelector((state: RootState) => state.auth);
 
-  // Local UI-only state — station filter isn't part of slice state
-  const [stationFilter, setStationFilter] = useState<string>('');
+  // Local UI-only state
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [stationFilter, setStationFilter] = useState<string>('');
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
   const [viewError, setViewError] = useState<string | null>(null);
 
-  // Check if user is admin
-  const isAdmin = user?.role === 'admin';
-
-  // Fetch submissions — page/limit come from the slice's own pagination state
+  // Fetch DR's own submissions using the DR-specific endpoint
   const fetchSubmissions = useCallback(() => {
     if (!accessToken || isInitializing) return;
 
-    // For admin users, set adminView: true to see all submissions including drafts
     const params: FetchSubmissionsParams = {
       station: stationFilter || undefined,
       page: pagination.page,
@@ -55,14 +51,9 @@ const AdminSubmissions: React.FC = () => {
       sortOrder: 'desc',
     };
 
-    // If admin, include adminView to see all submissions
-    if (isAdmin) {
-      params.adminView = true;
-    }
-
-    console.log('📤 Fetching submissions with params:', params);
-    dispatch(getSubmissions(params));
-  }, [dispatch, stationFilter, pagination.page, pagination.limit, accessToken, isInitializing, isAdmin]);
+    console.log('📤 Fetching DR submissions with params:', params);
+    dispatch(getMySubmissions(params));
+  }, [dispatch, stationFilter, pagination.page, pagination.limit, accessToken, isInitializing]);
 
   useEffect(() => {
     fetchSubmissions();
@@ -76,7 +67,7 @@ const AdminSubmissions: React.FC = () => {
     };
   }, [dispatch]);
 
-  // View submission details — reads from slice's currentSubmission, not local state
+  // View submission details
   const handleViewSubmission = async (submission: StationRequirementSummary) => {
     setViewError(null);
     let submissionId: string | undefined = submission.id;
@@ -152,7 +143,7 @@ const AdminSubmissions: React.FC = () => {
     }
   };
 
-  // Get status badge color
+  // Get status badge
   const getStatusBadge = (status: string, reviewStatus?: string): React.ReactNode => {
     if (status === 'draft') {
       return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">Draft</span>;
@@ -189,7 +180,7 @@ const AdminSubmissions: React.FC = () => {
             !
           </div>
           <h2 className="text-lg font-semibold text-slate-800 mb-2">Authentication Required</h2>
-          <p className="text-sm text-slate-600">Please log in to your administrative account to access station submissions.</p>
+          <p className="text-sm text-slate-600">Please log in to access your submissions.</p>
         </div>
       </div>
     );
@@ -208,14 +199,13 @@ const AdminSubmissions: React.FC = () => {
           <div className="relative z-10">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-white/10 text-[#c9b98a] text-xs font-semibold tracking-wider uppercase mb-3 backdrop-blur-sm">
               <span className="w-2 h-2 rounded-full bg-[#a3782e]"></span>
-              Admin Dashboard · {isAdmin ? 'Administrator View' : 'DR View'}
+              Deputy Registrar Dashboard · My Submissions
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-2">
-              All Station Submissions
+              My Station Submissions
             </h1>
             <p className="text-sm sm:text-base text-[#cdd6e0] max-w-2xl">
-              Monitor, filter, and inspect station requirement submissions across all regional jurisdictions.
-              {isAdmin && ' (Admin view - includes drafts)'}
+              View and track your station requirement submissions. Both drafts and submitted submissions are shown here.
             </p>
           </div>
         </div>
@@ -310,7 +300,7 @@ const AdminSubmissions: React.FC = () => {
           {isLoading ? (
             <div className="p-16 text-center">
               <div className="w-10 h-10 border-4 border-[#1e3a5f]/20 border-t-[#1e3a5f] rounded-full animate-spin mx-auto"></div>
-              <p className="mt-4 text-sm text-slate-500">Fetching records...</p>
+              <p className="mt-4 text-sm text-slate-500">Fetching your submissions...</p>
             </div>
           ) : submissions.length === 0 ? (
             <div className="p-16 text-center">
@@ -319,7 +309,8 @@ const AdminSubmissions: React.FC = () => {
               </div>
               <h3 className="text-base font-semibold text-slate-800">No submissions found</h3>
               <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-                No records match your active search filters or no submissions have been logged yet.
+                You haven't created any station requirement submissions yet.
+                Use the "New Submission" form to get started.
               </p>
             </div>
           ) : (
@@ -330,7 +321,8 @@ const AdminSubmissions: React.FC = () => {
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-3.5 w-16">#</th>
                       <th className="px-6 py-3.5">Station</th>
-                      <th className="px-6 py-3.5 text-right">File Folders Total</th>
+                      <th className="px-6 py-3.5 text-right">File Folders</th>
+                      <th className="px-6 py-3.5 text-right">Registers</th>
                       <th className="px-6 py-3.5">Status</th>
                       <th className="px-6 py-3.5">Submitted At</th>
                       <th className="px-6 py-3.5 text-center w-32">Action</th>
@@ -354,11 +346,16 @@ const AdminSubmissions: React.FC = () => {
                               {submission.fileFoldersTotal.toLocaleString()}
                             </span>
                           </td>
+                          <td className="px-6 py-4 text-right font-medium text-slate-800">
+                            <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold">
+                              {submission.registersTotal.toLocaleString()}
+                            </span>
+                          </td>
                           <td className="px-6 py-4">
                             {getStatusBadge(submission.status, submission.reviewStatus)}
                           </td>
                           <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
-                            {formatDate(submission.submittedAt)}
+                            {formatDate(submission.submittedAt || submission.updatedAt)}
                           </td>
                           <td className="px-6 py-4 text-center whitespace-nowrap">
                             <button
@@ -405,7 +402,7 @@ const AdminSubmissions: React.FC = () => {
         </div>
 
         {/* Aggregate Stats Cards */}
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Submissions</div>
@@ -418,7 +415,7 @@ const AdminSubmissions: React.FC = () => {
 
           <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total File Folders (Current Page)</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total File Folders</div>
               <div className="text-2xl font-extrabold text-slate-900 mt-1">
                 {submissions.reduce((sum, s) => sum + s.fileFoldersTotal, 0).toLocaleString()}
               </div>
@@ -427,10 +424,22 @@ const AdminSubmissions: React.FC = () => {
               📁
             </div>
           </div>
+
+          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm flex items-center justify-between">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Registers</div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1">
+                {submissions.reduce((sum, s) => sum + s.registersTotal, 0).toLocaleString()}
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
+              📖
+            </div>
+          </div>
         </div>
 
         <p className="text-xs text-slate-400 mt-6 text-center">
-          Administrative Registry System · System status normal
+          Deputy Registrar Registry System · Your submissions are tracked here
         </p>
       </div>
 
@@ -502,16 +511,16 @@ const AdminSubmissions: React.FC = () => {
                       <div className="bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted By</p>
                         <p className="font-semibold text-slate-900 text-sm mt-0.5 truncate">
-                          {currentSubmission.submitterName || currentSubmission.submitterEmail || 'Unknown User'}
+                          {currentSubmission.submitterName || currentSubmission.submitterEmail || 'You'}
                         </p>
                       </div>
                     </div>
 
-                    {/* Breakdown Section */}
+                    {/* File Folders Section */}
                     <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
                       <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                         <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-                          File Folders Items
+                          File Folders
                         </h3>
                         <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-bold">
                           {currentSubmission.fileFolders.length} Item(s)
@@ -544,14 +553,52 @@ const AdminSubmissions: React.FC = () => {
                       )}
                     </div>
 
+                    {/* Registers Section */}
+                    <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                      <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                          Registers
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-bold">
+                          {currentSubmission.registers.length} Item(s)
+                        </span>
+                      </div>
+
+                      {currentSubmission.registers.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400 text-xs italic">
+                          No registers requested in this submission.
+                        </div>
+                      ) : (
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-semibold uppercase tracking-wider">
+                              <th className="px-5 py-3">Division</th>
+                              <th className="px-5 py-3">Register Description</th>
+                              <th className="px-5 py-3 text-right">Quantity</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {currentSubmission.registers.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="px-5 py-3 text-slate-500 font-medium">{item.division}</td>
+                                <td className="px-5 py-3 text-slate-800 font-semibold">{item.name}</td>
+                                <td className="px-5 py-3 text-right font-bold text-slate-900">{item.quantity}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
                     {/* Grand Total Highlight */}
                     <div className="bg-gradient-to-r from-[#12253d] to-[#1e3a5f] text-white rounded-xl p-4 flex items-center justify-between shadow-sm">
                       <div>
                         <p className="text-[10px] uppercase font-bold tracking-widest text-[#c9b98a]">Grand Total Requested</p>
-                        <p className="text-xs text-[#cdd6e0]">Aggregated file folder count</p>
+                        <p className="text-xs text-[#cdd6e0]">Combined file folders and registers</p>
                       </div>
                       <div className="text-2xl font-black text-white">
-                        {currentSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}
+                        {currentSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0) +
+                         currentSubmission.registers.reduce((sum, item) => sum + item.quantity, 0)}
                       </div>
                     </div>
                   </div>
@@ -576,4 +623,4 @@ const AdminSubmissions: React.FC = () => {
   );
 };
 
-export default AdminSubmissions;
+export default DrSubmissions;
