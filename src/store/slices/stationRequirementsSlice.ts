@@ -131,6 +131,7 @@ export const ADDITIONAL_REGISTERS = [
   "Missing File Register",
   "Exhibit Register",
   "Court Assistants Exhibit Register",
+  "Certified Urgent Applications Tracking Register",
   "Tracking Register for High Court Appeal Pending Due to Lack of Lower Court Record",
   "Tracking Registers for Appeals to Court of Appeal",
 ] as const;
@@ -965,6 +966,7 @@ export const getRegisters = createAsyncThunk<
   }
 });
 
+// Get DR's own submissions (drafts and submitted)
 export const getMySubmissions = createAsyncThunk<
   {
     submissions: StationRequirementSummary[];
@@ -1103,6 +1105,7 @@ const stationRequirementsSlice = createSlice({
         state.error = action.payload || "Failed to create submission";
       })
 
+      // --- getMySubmissions ---
       .addCase(getMySubmissions.pending, (state) => {
         state.isLoading = true;
         state.error = null;

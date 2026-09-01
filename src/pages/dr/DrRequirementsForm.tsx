@@ -1,7 +1,11 @@
+// DrRequirementsForm.tsx
+
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   createSubmission,
+  updateSubmission,
+  getSubmissionById,
   getUniqueStations,
   clearError,
   clearCurrentSubmission,
@@ -10,7 +14,6 @@ import {
   ADDITIONAL_REGISTERS,
   getCaseCode,
   getCaseColor,
-  //getAllRegistersFlat,
   type StationRequirementItem,
   type SubmissionStatus,
   type StationRequirementSubmission,
@@ -107,7 +110,6 @@ const populateFromSubmission = (
 
   // Populate registers
   submission.registers.forEach((item) => {
-    // Check if it belongs to a register category or Additional
     if (registerValues[item.division] && registerValues[item.division][item.name] !== undefined) {
       registerValues[item.division][item.name] = item.quantity;
     }
@@ -140,13 +142,18 @@ interface RequirementsFormProps {
   submissionId?: string;
   initialSubmission?: StationRequirementSubmission | null;
   onSubmitted?: () => void;
+  // New prop for loading a draft by ID
+  loadDraftId?: string;
+  onDraftLoaded?: (submission: StationRequirementSubmission) => void;
 }
 
 const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   editMode = false,
   submissionId,
   initialSubmission = null,
-  onSubmitted
+  onSubmitted,
+  loadDraftId,
+  onDraftLoaded,
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const {
@@ -188,13 +195,64 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(editMode);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
 
   // Sync form state from initialSubmission/currentSubmission during render
   const [syncedId, setSyncedId] = useState<string | undefined>(
     editMode ? submissionId : undefined
   );
 
-  if (editMode && submissionId !== syncedId) {
+  // Load draft when loadDraftId is provided
+  useEffect(() => {
+    if (loadDraftId && accessToken && !isInitializing) {
+      const loadDraft = async () => {
+        setIsLoadingDraft(true);
+        setErrorMessage(null);
+        try {
+          const result = await dispatch(getSubmissionById(loadDraftId)).unwrap();
+          const submission = result.submission;
+          
+          if (submission.status !== 'draft') {
+            setErrorMessage('This submission has already been submitted and cannot be edited.');
+            setIsLoadingDraft(false);
+            return;
+          }
+
+          // Populate form with draft data
+          setFormData({
+            station: submission.station,
+            status: submission.status,
+          });
+          
+          const { fileFolderValues: ffValues, registerValues: regValues } = populateFromSubmission(submission);
+          setFileFolderValues(ffValues);
+          setRegisterValues(regValues);
+          setIsEditing(true);
+          setSyncedId(loadDraftId);
+          
+          if (onDraftLoaded) {
+            onDraftLoaded(submission);
+          }
+          
+          console.log('✅ Draft loaded successfully:', {
+            id: submission.id,
+            station: submission.station,
+            fileFolders: submission.fileFolders.length,
+            registers: submission.registers.length,
+          });
+        } catch (err) {
+          console.error('❌ Failed to load draft:', err);
+          setErrorMessage('Failed to load draft. Please try again.');
+        } finally {
+          setIsLoadingDraft(false);
+        }
+      };
+      
+      loadDraft();
+    }
+  }, [loadDraftId, accessToken, isInitializing, dispatch, onDraftLoaded]);
+
+  if (editMode && submissionId !== syncedId && !loadDraftId) {
     const submission = initialSubmission ?? currentSubmission;
     if (submission) {
       setSyncedId(submissionId);
@@ -218,11 +276,11 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   useEffect(() => {
     return () => {
       dispatch(clearError());
-      if (!editMode) {
+      if (!editMode && !loadDraftId) {
         dispatch(clearCurrentSubmission());
       }
     };
-  }, [dispatch, editMode]);
+  }, [dispatch, editMode, loadDraftId]);
 
   const handleFileFolderChange = (division: string, name: string, value: number): void => {
     setFileFolderValues((prev) => ({
@@ -278,78 +336,94 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
     await handleSubmit('submitted');
   };
 
-  const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
-    setErrorMessage(null);
-    setShowSuccess(false);
+// DrRequirementsForm.tsx - Updated handleSubmit function
 
-    if (!formData.station.trim()) {
-      setErrorMessage('Please enter a station name.');
-      return;
+const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
+  setErrorMessage(null);
+  setShowSuccess(false);
+
+  if (!formData.station.trim()) {
+    setErrorMessage('Please enter a station name.');
+    return;
+  }
+
+  const data = collectData();
+  const hasFileItems = data.fileFolders.length > 0;
+  const hasRegisterItems = data.registers.length > 0;
+  const hasItems = hasFileItems || hasRegisterItems;
+
+  if (!hasItems) {
+    setErrorMessage('Enter at least one quantity greater than 0 in either File Folders or Registers.');
+    return;
+  }
+
+  if (status === 'submitted' && !hasItems) {
+    setErrorMessage('Please add at least one item before submitting.');
+    return;
+  }
+
+  console.log(`📤 ${status === 'draft' ? 'Saving draft' : 'Submitting'} station requirements:`, {
+    station: data.station,
+    fileFolders: data.fileFolders,
+    registers: data.registers,
+    status,
+  });
+
+  try {
+    let result;
+
+    // Check if we're editing an existing submission
+    const existingId = submissionId || syncedId;
+    
+    if (isEditing && existingId) {
+      // Update existing submission - id is guaranteed to be a string here
+      const payload = {
+        id: existingId, // This is now definitely a string
+        station: data.station,
+        fileFolders: data.fileFolders,
+        registers: data.registers,
+        status,
+      };
+      result = await dispatch(updateSubmission(payload)).unwrap();
+      setSuccessMessage(status === 'draft' ? 'Draft updated successfully!' : 'Submission updated and submitted successfully!');
+    } else {
+      // Create new submission
+      const payload = {
+        station: data.station,
+        fileFolders: data.fileFolders,
+        registers: data.registers,
+        status,
+      };
+      result = await dispatch(createSubmission(payload)).unwrap();
+      setSuccessMessage(status === 'draft' ? 'Draft saved successfully!' : 'Submission submitted successfully!');
     }
 
-    const data = collectData();
-    const hasFileItems = data.fileFolders.length > 0;
-    const hasRegisterItems = data.registers.length > 0;
-    const hasItems = hasFileItems || hasRegisterItems;
+    console.log('✅ Submission successful:', result);
 
-    if (!hasItems) {
-      setErrorMessage('Enter at least one quantity greater than 0 in either File Folders or Registers.');
-      return;
+    setShowSuccess(true);
+
+    // Reset form if not editing and it's a draft
+    if (!isEditing && status === 'draft') {
+      setFileFolderValues(buildInitialFileFolderValues());
+      setRegisterValues(buildInitialRegisterValues());
+      setFormData(prev => ({ ...prev, status: 'draft' }));
+      setCurrentStep(1);
     }
 
-    if (status === 'submitted' && !hasItems) {
-      setErrorMessage('Please add at least one item before submitting.');
-      return;
+    setTimeout(() => {
+      setShowSuccess(false);
+      setSuccessMessage('');
+    }, 5000);
+
+    if (onSubmitted) {
+      onSubmitted();
     }
-
-    console.log(`📤 ${status === 'draft' ? 'Saving draft' : 'Submitting'} station requirements:`, {
-      station: data.station,
-      fileFolders: data.fileFolders,
-      registers: data.registers,
-      status,
-    });
-
-    try {
-      let result;
-
-      if (isEditing && submissionId) {
-        // Update existing submission
-        setSuccessMessage('Submission updated successfully!');
-      } else {
-        // Create new submission
-        const payload = {
-          ...data,
-          status,
-        };
-        result = await dispatch(createSubmission(payload)).unwrap();
-        setSuccessMessage(status === 'draft' ? 'Draft saved successfully!' : 'Submission submitted successfully!');
-      }
-
-      console.log('✅ Submission successful:', result);
-
-      setShowSuccess(true);
-
-      if (!isEditing) {
-        setFileFolderValues(buildInitialFileFolderValues());
-        setRegisterValues(buildInitialRegisterValues());
-        setFormData(prev => ({ ...prev, status: 'draft' }));
-        setCurrentStep(1);
-      }
-
-      setTimeout(() => {
-        setShowSuccess(false);
-        setSuccessMessage('');
-      }, 5000);
-
-      if (onSubmitted) {
-        onSubmitted();
-      }
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to save submission. Please try again.';
-      console.error('❌ Submission error:', err);
-      setErrorMessage(errorMsg);
-    }
-  };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Failed to save submission. Please try again.';
+    console.error('❌ Submission error:', err);
+    setErrorMessage(errorMsg);
+  }
+};
 
   const renderCategorySection = (
     values: CategoryValues,
@@ -432,12 +506,12 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
     );
   };
 
-  if (isInitializing) {
+  if (isInitializing || isLoadingDraft) {
     return (
       <div className="min-h-screen bg-[#f7f5f0] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1e3a5f] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{isLoadingDraft ? 'Loading draft...' : 'Loading...'}</p>
         </div>
       </div>
     );
@@ -466,8 +540,13 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
             Data Collection · Ref RHC/DSCM/112
           </div>
           <h1 className="text-2xl font-semibold mb-2">
-            {isEditing ? 'Edit' : 'Station Requirement Form'}
+            {isEditing ? 'Edit Draft' : 'Station Requirement Form'}
           </h1>
+          {isEditing && (
+            <div className="text-sm text-[#c9b98a] mb-2">
+              Editing draft for {currentSubmission?.station || formData.station}
+            </div>
+          )}
           <div className="flex items-center gap-4 mt-2">
             <span className="text-sm text-[#c9b98a]">
               Step {currentStep} of 2: {currentStep === 1 ? 'File Folders' : 'Registers'}
@@ -477,12 +556,6 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
               <div className={`w-3 h-3 rounded-full ${currentStep === 2 ? 'bg-[#a3782e]' : 'bg-gray-500'}`} />
             </div>
           </div>
-          {isEditing && (
-            <div className="mt-2 text-sm text-[#c9b98a]">
-              Editing submission for {currentSubmission?.station || initialSubmission?.station}
-              {currentSubmission?.status === 'submitted' && ' (Submitted)'}
-            </div>
-          )}
         </div>
 
         {/* Instructions */}
@@ -604,12 +677,21 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
               {isSubmitting ? 'Saving...' : 'Save Draft'}
             </button>
           )}
+          {isEditing && (
+            <button
+              onClick={handleSaveDraft}
+              disabled={isSubmitting}
+              className="px-6 py-3 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Saving...' : 'Update Draft'}
+            </button>
+          )}
           <button
             onClick={handleSubmitDraft}
             disabled={isSubmitting || totalItems === 0}
             className="px-6 py-3 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Submitting...' : (isEditing ? 'Update Submission' : 'Submit')}
+            {isSubmitting ? 'Submitting...' : (isEditing ? 'Submit Draft' : 'Submit')}
           </button>
           {showSuccess && (
             <div className="bg-green-50 border border-green-300 text-green-800 px-4 py-2 rounded-md text-sm">

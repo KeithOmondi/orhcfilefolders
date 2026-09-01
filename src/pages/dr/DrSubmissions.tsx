@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   getMySubmissions,
   getSubmissionById,
@@ -25,10 +26,11 @@ type FetchSubmissionsParams = {
 
 const DrSubmissions: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
   const { submissions, currentSubmission, isLoading, error, pagination } = useSelector(
     (state: RootState) => state.stationRequirements
   );
-  const { accessToken, isInitializing  } = useSelector((state: RootState) => state.auth);
+  const { accessToken, isInitializing } = useSelector((state: RootState) => state.auth);
 
   // Local UI-only state
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -66,6 +68,16 @@ const DrSubmissions: React.FC = () => {
       dispatch(clearCurrentSubmission());
     };
   }, [dispatch]);
+
+  // Handle Edit Draft - navigate to the form with draft ID
+  const handleEditDraft = (submission: StationRequirementSummary) => {
+    if (!submission.id) {
+      console.error('No submission ID found for editing');
+      return;
+    }
+    // Navigate to the edit form with the draft ID
+    navigate(`/dr/requirements/edit/${submission.id}`);
+  };
 
   // View submission details
   const handleViewSubmission = async (submission: StationRequirementSummary) => {
@@ -163,6 +175,8 @@ const DrSubmissions: React.FC = () => {
     return null;
   };
 
+ 
+
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-[#f7f5f0] flex flex-col items-center justify-center p-4">
@@ -205,7 +219,7 @@ const DrSubmissions: React.FC = () => {
               My Station Submissions
             </h1>
             <p className="text-sm sm:text-base text-[#cdd6e0] max-w-2xl">
-              View and track your station requirement submissions. Both drafts and submitted submissions are shown here.
+              View and track your station requirement submissions. Drafts can be edited, submitted submissions are read-only.
             </p>
           </div>
         </div>
@@ -325,12 +339,13 @@ const DrSubmissions: React.FC = () => {
                       <th className="px-6 py-3.5 text-right">Registers</th>
                       <th className="px-6 py-3.5">Status</th>
                       <th className="px-6 py-3.5">Submitted At</th>
-                      <th className="px-6 py-3.5 text-center w-32">Action</th>
+                      <th className="px-6 py-3.5 text-center w-40">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/70 text-sm">
                     {submissions.map((submission: StationRequirementSummary, index: number) => {
                       const globalIndex = (pagination.page - 1) * pagination.limit + index + 1;
+                      const isDraft = submission.status === 'draft';
 
                       return (
                         <tr
@@ -358,12 +373,22 @@ const DrSubmissions: React.FC = () => {
                             {formatDate(submission.submittedAt || submission.updatedAt)}
                           </td>
                           <td className="px-6 py-4 text-center whitespace-nowrap">
-                            <button
-                              onClick={() => handleViewSubmission(submission)}
-                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-md text-xs font-semibold text-[#1e3a5f] bg-[#1e3a5f]/5 hover:bg-[#1e3a5f] hover:text-white transition-all"
-                            >
-                              View Details
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              {isDraft && (
+                                <button
+                                  onClick={() => handleEditDraft(submission)}
+                                  className="inline-flex items-center justify-center px-3 py-1.5 rounded-md text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 transition-all"
+                                >
+                                  Edit Draft
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleViewSubmission(submission)}
+                                className="inline-flex items-center justify-center px-3 py-1.5 rounded-md text-xs font-semibold text-[#1e3a5f] bg-[#1e3a5f]/5 hover:bg-[#1e3a5f] hover:text-white transition-all"
+                              >
+                                View Details
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
