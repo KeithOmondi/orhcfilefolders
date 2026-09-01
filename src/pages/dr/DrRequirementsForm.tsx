@@ -334,7 +334,7 @@ const RequirementsForm: React.FC = () => {
             disabled={isSubmitting}
             className="px-6 py-3 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Saving...' : "Save this station's submission"}
+            {isSubmitting ? 'Saving...' : "Save submission"}
           </button>
           {showSuccess && (
             <div className="bg-green-50 border border-green-300 text-green-800 px-4 py-2 rounded-md text-sm">
