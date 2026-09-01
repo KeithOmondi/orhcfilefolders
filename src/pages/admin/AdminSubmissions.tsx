@@ -9,7 +9,6 @@ import {
   setLimit,
   resetPagination,
   type StationRequirementSummary,
-  //type GetSubmissionsQuery,
 } from '../../store/slices/stationRequirementsSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 
@@ -330,10 +329,11 @@ const AdminSubmissions: React.FC = () => {
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-3.5 w-16">#</th>
                       <th className="px-6 py-3.5">Station</th>
-                      <th className="px-6 py-3.5 text-right">File Folders Total</th>
+                      <th className="px-6 py-3.5 text-right">File Folders</th>
+                      <th className="px-6 py-3.5 text-right">Registers</th>
                       <th className="px-6 py-3.5">Status</th>
                       <th className="px-6 py-3.5">Submitted At</th>
-                      <th className="px-6 py-3.5 text-center w-32">Action</th>
+                      <th className="px-6 py-3.5 text-center w-40">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/70 text-sm">
@@ -354,11 +354,16 @@ const AdminSubmissions: React.FC = () => {
                               {submission.fileFoldersTotal.toLocaleString()}
                             </span>
                           </td>
+                          <td className="px-6 py-4 text-right font-medium text-slate-800">
+                            <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold">
+                              {submission.registersTotal.toLocaleString()}
+                            </span>
+                          </td>
                           <td className="px-6 py-4">
                             {getStatusBadge(submission.status, submission.reviewStatus)}
                           </td>
                           <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
-                            {formatDate(submission.submittedAt)}
+                            {formatDate(submission.submittedAt || submission.updatedAt)}
                           </td>
                           <td className="px-6 py-4 text-center whitespace-nowrap">
                             <button
@@ -405,7 +410,7 @@ const AdminSubmissions: React.FC = () => {
         </div>
 
         {/* Aggregate Stats Cards */}
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Submissions</div>
@@ -418,13 +423,25 @@ const AdminSubmissions: React.FC = () => {
 
           <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total File Folders (Current Page)</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total File Folders</div>
               <div className="text-2xl font-extrabold text-slate-900 mt-1">
                 {submissions.reduce((sum, s) => sum + s.fileFoldersTotal, 0).toLocaleString()}
               </div>
             </div>
             <div className="w-10 h-10 rounded-lg bg-amber-50 text-[#a3782e] flex items-center justify-center text-lg">
               📁
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm flex items-center justify-between">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Registers</div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1">
+                {submissions.reduce((sum, s) => sum + s.registersTotal, 0).toLocaleString()}
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
+              📖
             </div>
           </div>
         </div>
@@ -507,7 +524,7 @@ const AdminSubmissions: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Breakdown Section */}
+                    {/* File Folders Section */}
                     <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
                       <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                         <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
@@ -544,14 +561,52 @@ const AdminSubmissions: React.FC = () => {
                       )}
                     </div>
 
+                    {/* Registers Section */}
+                    <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+                      <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                          Registers Items
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-bold">
+                          {currentSubmission.registers.length} Item(s)
+                        </span>
+                      </div>
+
+                      {currentSubmission.registers.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400 text-xs italic">
+                          No registers requested in this submission.
+                        </div>
+                      ) : (
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-semibold uppercase tracking-wider">
+                              <th className="px-5 py-3">Division</th>
+                              <th className="px-5 py-3">Register Description</th>
+                              <th className="px-5 py-3 text-right">Quantity</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {currentSubmission.registers.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="px-5 py-3 text-slate-500 font-medium">{item.division}</td>
+                                <td className="px-5 py-3 text-slate-800 font-semibold">{item.name}</td>
+                                <td className="px-5 py-3 text-right font-bold text-slate-900">{item.quantity}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
                     {/* Grand Total Highlight */}
                     <div className="bg-gradient-to-r from-[#12253d] to-[#1e3a5f] text-white rounded-xl p-4 flex items-center justify-between shadow-sm">
                       <div>
                         <p className="text-[10px] uppercase font-bold tracking-widest text-[#c9b98a]">Grand Total Requested</p>
-                        <p className="text-xs text-[#cdd6e0]">Aggregated file folder count</p>
+                        <p className="text-xs text-[#cdd6e0]">Combined file folders and registers</p>
                       </div>
                       <div className="text-2xl font-black text-white">
-                        {currentSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}
+                        {currentSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0) +
+                         currentSubmission.registers.reduce((sum, item) => sum + item.quantity, 0)}
                       </div>
                     </div>
                   </div>
