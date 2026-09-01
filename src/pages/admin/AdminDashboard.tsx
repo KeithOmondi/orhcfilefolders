@@ -1,31 +1,53 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   getSubmissionTotals,
   getSubmissions,
+  getAdminDashboard,
   clearError,
-  //type SubmissionTotals,
   type StationRequirementSummary,
 } from '../../store/slices/stationRequirementsSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 
 const AdminDashboard: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { totals,  isLoading, error } = useSelector(
+  const { totals, isLoading, error, dashboardStats } = useSelector(
     (state: RootState) => state.stationRequirements
   );
   const { accessToken, isInitializing, user } = useSelector((state: RootState) => state.auth);
 
   const [recentSubmissions, setRecentSubmissions] = useState<StationRequirementSummary[]>([]);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(true);
+  const hasFetched = useRef(false);
 
-  // Fetch dashboard data
+  // Fetch dashboard data - using a ref to prevent multiple calls
   useEffect(() => {
-    if (!isInitializing && accessToken) {
-      dispatch(getSubmissionTotals());
-      dispatch(getSubmissions({ page: 1, limit: 5 })).unwrap().then((result) => {
-        setRecentSubmissions(result.submissions || []);
-      });
+    // Prevent multiple calls
+    if (hasFetched.current || isInitializing || !accessToken) {
+      return;
     }
+    
+    hasFetched.current = true;
+    
+    // Fetch totals and dashboard stats
+    dispatch(getSubmissionTotals());
+    dispatch(getAdminDashboard());
+    
+    // Fetch recent submissions
+    dispatch(getSubmissions({ 
+      page: 1, 
+      limit: 5,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc'
+    })).unwrap()
+      .then((result) => {
+        setRecentSubmissions(result.submissions || []);
+        setIsLoadingSubmissions(false);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch recent submissions:', err);
+        setIsLoadingSubmissions(false);
+      });
   }, [dispatch, accessToken, isInitializing]);
 
   // Clear error when component unmounts
@@ -36,7 +58,8 @@ const AdminDashboard: React.FC = () => {
   }, [dispatch]);
 
   // Format date for display
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return 'N/A';
     try {
       return new Date(dateString).toLocaleDateString('en-KE', {
         year: 'numeric',
@@ -47,6 +70,38 @@ const AdminDashboard: React.FC = () => {
       });
     } catch {
       return dateString;
+    }
+  };
+
+  // Get status badge color
+  const getStatusColor = (status?: string): string => {
+    switch (status) {
+      case 'submitted':
+        return 'bg-blue-100 text-blue-800';
+      case 'approved':
+        return 'bg-green-100 text-green-800';
+      case 'needs_revision':
+        return 'bg-red-100 text-red-800';
+      case 'draft':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Get status display text
+  const getStatusText = (status?: string): string => {
+    switch (status) {
+      case 'submitted':
+        return 'Submitted';
+      case 'approved':
+        return 'Approved';
+      case 'needs_revision':
+        return 'Needs Revision';
+      case 'draft':
+        return 'Draft';
+      default:
+        return 'Unknown';
     }
   };
 
@@ -124,6 +179,9 @@ const AdminDashboard: React.FC = () => {
                 </svg>
               </div>
             </div>
+            <div className="mt-2 text-xs text-gray-500">
+              {totals?.submittedCount || 0} submitted · {totals?.draftsCount || 0} drafts
+            </div>
           </div>
 
           <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -161,16 +219,19 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Unique Stations</p>
+                <p className="text-xs uppercase tracking-wider text-gray-500">Pending Reviews</p>
                 <p className="text-3xl font-bold text-[#1e3a5f] mt-1">
-                  {isLoading ? '...' : totals?.uniqueStations || 0}
+                  {isLoading ? '...' : dashboardStats?.pendingReviews || 0}
                 </p>
               </div>
               <div className="bg-amber-50 p-3 rounded-full">
                 <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              {dashboardStats?.completionRate || 0}% completion rate
             </div>
           </div>
         </div>
@@ -188,7 +249,7 @@ const AdminDashboard: React.FC = () => {
               </button>
             </div>
             
-            {isLoading ? (
+            {isLoadingSubmissions ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1e3a5f] mx-auto"></div>
                 <p className="mt-2 text-gray-600">Loading recent submissions...</p>
@@ -204,21 +265,25 @@ const AdminDashboard: React.FC = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Station</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quarter</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {recentSubmissions.map((submission, index) => (
-                      <tr key={index} className="hover:bg-gray-50 transition-colors">
+                      <tr key={submission.id || index} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 font-medium text-gray-900">{submission.station}</td>
-                       
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(submission.status)}`}>
+                            {getStatusText(submission.status)}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {submission.fileFoldersTotal + submission.registersTotal}
                         </td>
                         <td className="px-4 py-3 text-gray-500 text-xs">
-                          {formatDate(submission.submittedAt)}
+                          {formatDate(submission.updatedAt)}
                         </td>
                       </tr>
                     ))}
@@ -242,12 +307,17 @@ const AdminDashboard: React.FC = () => {
                 </svg>
               </button>
               <button 
-                onClick={() => window.location.href = '/dr/requirements'}
+                onClick={() => window.location.href = '/admin/review-queue'}
                 className="w-full flex items-center justify-between px-4 py-3 bg-[#f7f5f0] rounded-lg hover:bg-gray-200 transition-colors"
               >
-                <span className="text-sm font-medium text-gray-700">Submit New Requirements</span>
+                <span className="text-sm font-medium text-gray-700">Review Queue</span>
+                {dashboardStats?.pendingReviews && dashboardStats.pendingReviews > 0 && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                    {dashboardStats.pendingReviews}
+                  </span>
+                )}
                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
               <button 

@@ -214,22 +214,34 @@ export const getCaseInfo = (category: string, caseName: string) => {
 };
 
 // Types matching backend structure
-// NOTE: "quarter" removed everywhere below — a DR only picks a station.
 export interface StationRequirementItem {
   division: string;
   name: string;
   quantity: number;
 }
 
+export type SubmissionStatus = 'draft' | 'submitted';
+export type ReviewStatus = 'pending' | 'approved' | 'needs_revision';
+
 export interface StationRequirementSubmission {
   id?: string;
   station: string;
   fileFolders: StationRequirementItem[];
   registers: StationRequirementItem[];
-  submittedAt: string;
+  status: SubmissionStatus;
+  submittedAt?: string;
+  updatedAt: string;
   submittedBy?: string;
   submitterName?: string;
   submitterEmail?: string;
+  emailSent?: boolean;
+  emailSentAt?: string;
+  emailError?: string;
+  adminReviewed?: boolean;
+  adminReviewedAt?: string;
+  adminReviewedBy?: string;
+  adminNotes?: string;
+  reviewStatus?: ReviewStatus;
 }
 
 export interface StationRequirementSummary {
@@ -237,7 +249,11 @@ export interface StationRequirementSummary {
   station: string;
   fileFoldersTotal: number;
   registersTotal: number;
-  submittedAt: string;
+  status: SubmissionStatus;
+  submittedAt?: string;
+  updatedAt: string;
+  submitterName?: string;
+  reviewStatus?: ReviewStatus;
 }
 
 export interface SubmissionTotals {
@@ -245,6 +261,60 @@ export interface SubmissionTotals {
   totalFileFolders: number;
   totalRegisters: number;
   uniqueStations: number;
+  draftsCount: number;
+  submittedCount: number;
+}
+
+export interface StationReport {
+  totalStations: number;
+  stationsByStatus: Record<string, number>;
+  stations: Array<{
+    station: string;
+    status: string;
+    lastUpdatedAt?: string;
+    submittedAt?: string;
+    submittedBy?: string;
+    submitterName?: string;
+    draftExists: boolean;
+    hasSubmitted: boolean;
+    progress: {
+      fileFoldersComplete: boolean;
+      registersComplete: boolean;
+      percentageComplete: number;
+    };
+  }>;
+  summary: {
+    completed: number;
+    pending: number;
+    notStarted: number;
+    total: number;
+    completionRate: number;
+  };
+}
+
+export interface AdminDashboardStats {
+  totalStations: number;
+  submissionsToday: number;
+  pendingReviews: number;
+  draftsCount: number;
+  submittedCount: number;
+  notStartedCount: number;
+  completionRate: number;
+  recentActivity: Array<{
+    id: string;
+    station: string;
+    action: 'submitted' | 'approved' | 'updated' | 'created' | 'reviewed' | 'rejected';
+    timestamp: string;
+    user: string;
+    details?: string;
+  }>;
+}
+
+export interface AdminReviewQueue {
+  pending: StationRequirementSubmission[];
+  approved: StationRequirementSubmission[];
+  needsRevision: StationRequirementSubmission[];
+  total: number;
 }
 
 interface ApiErrorResponse {
@@ -258,8 +328,12 @@ interface StationRequirementsState {
   totals: SubmissionTotals | null;
   stations: string[];
   categories: { category: string; names: string[] }[];
+  report: StationReport | null;
+  dashboardStats: AdminDashboardStats | null;
+  reviewQueue: AdminReviewQueue | null;
   isLoading: boolean;
   isSubmitting: boolean;
+  isReviewing: boolean;
   error: string | null;
   pagination: {
     page: number;
@@ -274,8 +348,12 @@ const initialState: StationRequirementsState = {
   totals: null,
   stations: [],
   categories: getAllValidCases(),
+  report: null,
+  dashboardStats: null,
+  reviewQueue: null,
   isLoading: false,
   isSubmitting: false,
+  isReviewing: false,
   error: null,
   pagination: {
     page: 1,
@@ -286,23 +364,24 @@ const initialState: StationRequirementsState = {
 
 // --- ASYNC THUNKS ---
 
-// Create a new submission
+// Create a new submission (draft or submitted)
 export const createSubmission = createAsyncThunk<
   { submission: StationRequirementSubmission },
   {
     station: string;
     fileFolders: StationRequirementItem[];
     registers: StationRequirementItem[];
+    status?: SubmissionStatus;
   },
   { rejectValue: string }
 >('stationRequirements/createSubmission', async (payload, { rejectWithValue }) => {
   try {
-    console.log('📤 Creating submission:', {
+    const status = payload.status || 'draft';
+    console.log(`📤 Creating ${status} submission:`, {
       station: payload.station,
       fileFoldersCount: payload.fileFolders.length,
       registersCount: payload.registers.length,
-      fileFoldersTotal: payload.fileFolders.reduce((sum, item) => sum + item.quantity, 0),
-      registersTotal: payload.registers.reduce((sum, item) => sum + item.quantity, 0),
+      status,
     });
 
     const response = await axiosClient.post('/station-requirements', payload);
@@ -310,6 +389,7 @@ export const createSubmission = createAsyncThunk<
     console.log('✅ Submission created:', {
       id: response.data.data.submission.id,
       station: response.data.data.submission.station,
+      status: response.data.data.submission.status,
     });
     
     return response.data.data;
@@ -317,11 +397,6 @@ export const createSubmission = createAsyncThunk<
     console.error('❌ Failed to create submission:', err);
     
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      console.error('📋 Server error response:', {
-        status: err.response?.status,
-        message: err.response?.data?.message,
-        data: err.response?.data,
-      });
       return rejectWithValue(
         err.response?.data?.message || 'Failed to create submission.'
       );
@@ -330,6 +405,71 @@ export const createSubmission = createAsyncThunk<
   }
 });
 
+// Submit a draft
+export const submitDraft = createAsyncThunk<
+  { submission: StationRequirementSubmission },
+  { id: string; sendEmail?: boolean },
+  { rejectValue: string }
+>('stationRequirements/submitDraft', async ({ id, sendEmail = true }, { rejectWithValue }) => {
+  try {
+    console.log('📤 Submitting draft:', { id, sendEmail });
+
+    const response = await axiosClient.post(`/station-requirements/${id}/submit`, { sendEmail });
+    
+    console.log('✅ Draft submitted:', {
+      id: response.data.data.submission.id,
+      station: response.data.data.submission.station,
+      submittedAt: response.data.data.submission.submittedAt,
+    });
+    
+    return response.data.data;
+  } catch (err: unknown) {
+    console.error('❌ Failed to submit draft:', err);
+    
+    if (axios.isAxiosError<ApiErrorResponse>(err)) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to submit draft.'
+      );
+    }
+    return rejectWithValue('An unexpected error occurred.');
+  }
+});
+
+// Admin review submission
+export const adminReviewSubmission = createAsyncThunk<
+  { submission: StationRequirementSubmission },
+  { id: string; reviewStatus: ReviewStatus; adminNotes?: string; sendNotification?: boolean },
+  { rejectValue: string }
+>('stationRequirements/adminReviewSubmission', async ({ id, reviewStatus, adminNotes, sendNotification = true }, { rejectWithValue }) => {
+  try {
+    console.log('📤 Reviewing submission:', { id, reviewStatus, adminNotes, sendNotification });
+
+    const response = await axiosClient.post(`/station-requirements/${id}/review`, {
+      reviewStatus,
+      adminNotes,
+      sendNotification,
+    });
+    
+    console.log('✅ Submission reviewed:', {
+      id: response.data.data.submission.id,
+      station: response.data.data.submission.station,
+      reviewStatus: response.data.data.submission.reviewStatus,
+    });
+    
+    return response.data.data;
+  } catch (err: unknown) {
+    console.error('❌ Failed to review submission:', err);
+    
+    if (axios.isAxiosError<ApiErrorResponse>(err)) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to review submission.'
+      );
+    }
+    return rejectWithValue('An unexpected error occurred.');
+  }
+});
+
+// Get all submissions with filtering and pagination
 // Get all submissions with filtering and pagination
 export const getSubmissions = createAsyncThunk<
   {
@@ -337,23 +477,111 @@ export const getSubmissions = createAsyncThunk<
     total: number;
     page: number;
     limit: number;
+    hasMore: boolean;
   },
   {
     station?: string;
+    status?: SubmissionStatus;
+    reviewStatus?: ReviewStatus;
+    fromDate?: string;
+    toDate?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: 'updatedAt' | 'submittedAt' | 'station';
+    sortOrder?: 'asc' | 'desc';
+    adminView?: boolean;
+  },
+  { rejectValue: string }
+>('stationRequirements/getSubmissions', async (params = {}, { rejectWithValue }) => {
+  try {
+    // Clean up undefined values - only include defined params
+    const cleanParams: Record<string, string | number | boolean> = {};
+    
+    // Only add params that are defined and not null
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        cleanParams[key] = value;
+      }
+    });
+
+    // Ensure page and limit have defaults if not provided
+    if (!cleanParams.page) cleanParams.page = 1;
+    if (!cleanParams.limit) cleanParams.limit = 20;
+    if (!cleanParams.sortBy) cleanParams.sortBy = 'updatedAt';
+    if (!cleanParams.sortOrder) cleanParams.sortOrder = 'desc';
+
+    console.log('📤 Fetching submissions with params:', cleanParams);
+
+    const response = await axiosClient.get('/station-requirements', { params: cleanParams });
+    return response.data.data;
+  } catch (err: unknown) {
+    console.error('❌ Failed to fetch submissions:', err);
+    if (axios.isAxiosError<ApiErrorResponse>(err)) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch submissions.'
+      );
+    }
+    return rejectWithValue('An unexpected error occurred.');
+  }
+});
+
+// Get station report (admin only)
+export const getStationReport = createAsyncThunk<
+  { report: StationReport },
+  {
+    status?: string;
     fromDate?: string;
     toDate?: string;
     page?: number;
     limit?: number;
   },
   { rejectValue: string }
->('stationRequirements/getSubmissions', async (params, { rejectWithValue }) => {
+>('stationRequirements/getStationReport', async (params, { rejectWithValue }) => {
   try {
-    const response = await axiosClient.get('/station-requirements', { params });
+    const response = await axiosClient.get('/station-requirements/report', { params });
     return response.data.data;
   } catch (err: unknown) {
     if (axios.isAxiosError<ApiErrorResponse>(err)) {
       return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch submissions.'
+        err.response?.data?.message || 'Failed to fetch station report.'
+      );
+    }
+    return rejectWithValue('An unexpected error occurred.');
+  }
+});
+
+// Get admin dashboard stats (admin only)
+export const getAdminDashboard = createAsyncThunk<
+  { stats: AdminDashboardStats },
+  void,
+  { rejectValue: string }
+>('stationRequirements/getAdminDashboard', async (_, { rejectWithValue }) => {
+  try {
+    const response = await axiosClient.get('/station-requirements/dashboard');
+    return response.data.data;
+  } catch (err: unknown) {
+    if (axios.isAxiosError<ApiErrorResponse>(err)) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch dashboard stats.'
+      );
+    }
+    return rejectWithValue('An unexpected error occurred.');
+  }
+});
+
+// Get review queue (admin only)
+export const getReviewQueue = createAsyncThunk<
+  { queue: AdminReviewQueue },
+  void,
+  { rejectValue: string }
+>('stationRequirements/getReviewQueue', async (_, { rejectWithValue }) => {
+  try {
+    const response = await axiosClient.get('/station-requirements/review-queue');
+    return response.data.data;
+  } catch (err: unknown) {
+    if (axios.isAxiosError<ApiErrorResponse>(err)) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch review queue.'
       );
     }
     return rejectWithValue('An unexpected error occurred.');
@@ -379,25 +607,6 @@ export const getSubmissionById = createAsyncThunk<
   }
 });
 
-// Get submissions by station
-export const getSubmissionsByStation = createAsyncThunk<
-  { submissions: StationRequirementSubmission[] },
-  { station: string },
-  { rejectValue: string }
->('stationRequirements/getSubmissionsByStation', async ({ station }, { rejectWithValue }) => {
-  try {
-    const response = await axiosClient.get(`/station-requirements/station/${station}`);
-    return response.data.data;
-  } catch (err: unknown) {
-    if (axios.isAxiosError<ApiErrorResponse>(err)) {
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to fetch station submissions.'
-      );
-    }
-    return rejectWithValue('An unexpected error occurred.');
-  }
-});
-
 // Update a submission
 export const updateSubmission = createAsyncThunk<
   { submission: StationRequirementSubmission },
@@ -406,6 +615,9 @@ export const updateSubmission = createAsyncThunk<
     station?: string;
     fileFolders?: StationRequirementItem[];
     registers?: StationRequirementItem[];
+    status?: SubmissionStatus;
+    reviewStatus?: ReviewStatus;
+    adminNotes?: string;
   },
   { rejectValue: string }
 >('stationRequirements/updateSubmission', async ({ id, ...payload }, { rejectWithValue }) => {
@@ -478,7 +690,6 @@ export const getUniqueStations = createAsyncThunk<
     
     if (submissions.length > 0) {
       const stations = [...new Set(submissions.map(s => s.station))].sort();
-      console.log('📊 Derived stations from submissions:', stations);
       return { stations };
     }
     
@@ -490,7 +701,6 @@ export const getUniqueStations = createAsyncThunk<
       
       if (submissions.length > 0) {
         const stations = [...new Set(submissions.map(s => s.station))].sort();
-        console.log('📊 Derived stations from submissions (API failed):', stations);
         return { stations };
       }
     } catch (deriveError) {
@@ -542,13 +752,17 @@ const stationRequirementsSlice = createSlice({
     deriveStations: (state) => {
       if (state.submissions.length > 0) {
         const stations = [...new Set(state.submissions.map(s => s.station))].sort();
-        
         if (stations.length > 0) {
           state.stations = stations;
         }
-        
-        console.log('🔄 Derived from submissions:', { stations });
       }
+    },
+    clearReport: (state) => {
+      state.report = null;
+    },
+    clearDashboard: (state) => {
+      state.dashboardStats = null;
+      state.reviewQueue = null;
     },
   },
   extraReducers: (builder) => {
@@ -562,7 +776,7 @@ const stationRequirementsSlice = createSlice({
         state.isSubmitting = false;
         state.currentSubmission = action.payload.submission;
         if (state.submissions) {
-          state.submissions.unshift({
+          const summary: StationRequirementSummary = {
             id: action.payload.submission.id,
             station: action.payload.submission.station,
             fileFoldersTotal: action.payload.submission.fileFolders.reduce(
@@ -573,13 +787,92 @@ const stationRequirementsSlice = createSlice({
               (sum, item) => sum + item.quantity,
               0
             ),
+            status: action.payload.submission.status,
+            updatedAt: action.payload.submission.updatedAt,
             submittedAt: action.payload.submission.submittedAt,
-          });
+            submitterName: action.payload.submission.submitterName,
+            reviewStatus: action.payload.submission.reviewStatus,
+          };
+          state.submissions.unshift(summary);
         }
       })
       .addCase(createSubmission.rejected, (state, action) => {
         state.isSubmitting = false;
         state.error = action.payload || 'Failed to create submission';
+      })
+
+      // --- submitDraft ---
+      .addCase(submitDraft.pending, (state) => {
+        state.isSubmitting = true;
+        state.error = null;
+      })
+      .addCase(submitDraft.fulfilled, (state, action) => {
+        state.isSubmitting = false;
+        state.currentSubmission = action.payload.submission;
+        const index = state.submissions.findIndex(
+          (s) => s.id === action.payload.submission.id
+        );
+        if (index !== -1) {
+          state.submissions[index] = {
+            id: action.payload.submission.id,
+            station: action.payload.submission.station,
+            fileFoldersTotal: action.payload.submission.fileFolders.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            ),
+            registersTotal: action.payload.submission.registers.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            ),
+            status: action.payload.submission.status,
+            updatedAt: action.payload.submission.updatedAt,
+            submittedAt: action.payload.submission.submittedAt,
+            submitterName: action.payload.submission.submitterName,
+            reviewStatus: action.payload.submission.reviewStatus,
+          };
+        }
+      })
+      .addCase(submitDraft.rejected, (state, action) => {
+        state.isSubmitting = false;
+        state.error = action.payload || 'Failed to submit draft';
+      })
+
+      // --- adminReviewSubmission ---
+      .addCase(adminReviewSubmission.pending, (state) => {
+        state.isReviewing = true;
+        state.error = null;
+      })
+      .addCase(adminReviewSubmission.fulfilled, (state, action) => {
+        state.isReviewing = false;
+        state.currentSubmission = action.payload.submission;
+        const index = state.submissions.findIndex(
+          (s) => s.id === action.payload.submission.id
+        );
+        if (index !== -1) {
+          state.submissions[index] = {
+            id: action.payload.submission.id,
+            station: action.payload.submission.station,
+            fileFoldersTotal: action.payload.submission.fileFolders.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            ),
+            registersTotal: action.payload.submission.registers.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            ),
+            status: action.payload.submission.status,
+            updatedAt: action.payload.submission.updatedAt,
+            submittedAt: action.payload.submission.submittedAt,
+            submitterName: action.payload.submission.submitterName,
+            reviewStatus: action.payload.submission.reviewStatus,
+          };
+        }
+        // Refresh review queue and dashboard after review
+        // These will be fetched separately if needed
+      })
+      .addCase(adminReviewSubmission.rejected, (state, action) => {
+        state.isReviewing = false;
+        state.error = action.payload || 'Failed to review submission';
       })
 
       // --- getSubmissions ---
@@ -598,7 +891,6 @@ const stationRequirementsSlice = createSlice({
         
         if (state.submissions.length > 0) {
           const stations = [...new Set(state.submissions.map(s => s.station))].sort();
-          
           if (stations.length > 0 && state.stations.length === 0) {
             state.stations = stations;
           }
@@ -607,6 +899,48 @@ const stationRequirementsSlice = createSlice({
       .addCase(getSubmissions.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload || 'Failed to fetch submissions';
+      })
+
+      // --- getStationReport ---
+      .addCase(getStationReport.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(getStationReport.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.report = action.payload.report;
+      })
+      .addCase(getStationReport.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Failed to fetch station report';
+      })
+
+      // --- getAdminDashboard ---
+      .addCase(getAdminDashboard.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(getAdminDashboard.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.dashboardStats = action.payload.stats;
+      })
+      .addCase(getAdminDashboard.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Failed to fetch dashboard stats';
+      })
+
+      // --- getReviewQueue ---
+      .addCase(getReviewQueue.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(getReviewQueue.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.reviewQueue = action.payload.queue;
+      })
+      .addCase(getReviewQueue.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Failed to fetch review queue';
       })
 
       // --- getSubmissionById ---
@@ -621,26 +955,6 @@ const stationRequirementsSlice = createSlice({
       .addCase(getSubmissionById.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload || 'Failed to fetch submission';
-      })
-
-      // --- getSubmissionsByStation ---
-      .addCase(getSubmissionsByStation.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(getSubmissionsByStation.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.submissions = action.payload.submissions.map((sub) => ({
-          id: sub.id,
-          station: sub.station,
-          fileFoldersTotal: sub.fileFolders.reduce((sum, item) => sum + item.quantity, 0),
-          registersTotal: sub.registers.reduce((sum, item) => sum + item.quantity, 0),
-          submittedAt: sub.submittedAt,
-        }));
-      })
-      .addCase(getSubmissionsByStation.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload || 'Failed to fetch station submissions';
       })
 
       // --- updateSubmission ---
@@ -666,7 +980,11 @@ const stationRequirementsSlice = createSlice({
               (sum, item) => sum + item.quantity,
               0
             ),
+            status: action.payload.submission.status,
+            updatedAt: action.payload.submission.updatedAt,
             submittedAt: action.payload.submission.submittedAt,
+            submitterName: action.payload.submission.submitterName,
+            reviewStatus: action.payload.submission.reviewStatus,
           };
         }
       })
@@ -721,7 +1039,6 @@ const stationRequirementsSlice = createSlice({
           const stations = [...new Set(state.submissions.map(s => s.station))].sort();
           if (stations.length > 0) {
             state.stations = stations;
-            console.log('📊 Auto-derived stations from submissions:', stations);
           }
         }
       })
@@ -734,7 +1051,6 @@ const stationRequirementsSlice = createSlice({
           const stations = [...new Set(state.submissions.map(s => s.station))].sort();
           if (stations.length > 0) {
             state.stations = stations;
-            console.log('📊 Auto-derived stations from submissions (after rejection):', stations);
           }
         }
       });
@@ -749,6 +1065,8 @@ export const {
   setLimit,
   setStations,
   deriveStations,
+  clearReport,
+  clearDashboard,
 } = stationRequirementsSlice.actions;
 
 export default stationRequirementsSlice.reducer;

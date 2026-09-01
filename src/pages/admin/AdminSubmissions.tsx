@@ -4,87 +4,56 @@ import {
   getSubmissions,
   getSubmissionById,
   clearError,
+  clearCurrentSubmission,
+  setPage,
+  setLimit,
+  resetPagination,
   type StationRequirementSummary,
-  type StationRequirementSubmission,
 } from '../../store/slices/stationRequirementsSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 
-interface SubmissionsResponse {
-  submissions: StationRequirementSummary[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
 const AdminSubmissions: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { submissions, isLoading, error } = useSelector(
+  const { submissions, currentSubmission, isLoading, error, pagination } = useSelector(
     (state: RootState) => state.stationRequirements
   );
   const { accessToken, isInitializing } = useSelector((state: RootState) => state.auth);
 
-  // Local state for filters
-  const [filters, setFilters] = useState({
-    station: '',
-    page: 1,
-    limit: 20,
-  });
-
+  // Local UI-only state — station filter isn't part of slice state
+  const [stationFilter, setStationFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [totalItems, setTotalItems] = useState(0);
 
   // Modal state
-  const [selectedSubmission, setSelectedSubmission] = useState<StationRequirementSubmission | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [viewError, setViewError] = useState<string | null>(null);
 
-  // Fetch submissions
-  const fetchSubmissions = useCallback(async () => {
+  // Fetch submissions — page/limit come from the slice's own pagination state
+  const fetchSubmissions = useCallback(() => {
     if (!accessToken || isInitializing) return;
 
-    try {
-      const result = (await dispatch(
-        getSubmissions({
-          station: filters.station || undefined,
-          page: filters.page,
-          limit: filters.limit,
-        })
-      ).unwrap()) as SubmissionsResponse;
+    dispatch(
+      getSubmissions({
+        station: stationFilter || undefined,
+        page: pagination.page,
+        limit: pagination.limit,
+      })
+    );
+  }, [dispatch, stationFilter, pagination.page, pagination.limit, accessToken, isInitializing]);
 
-      return result;
-    } catch (err) {
-      console.error('Failed to fetch submissions:', err);
-      return null;
-    }
-  }, [dispatch, filters.station, filters.page, filters.limit, accessToken, isInitializing]);
-
-  // Fetch submissions on mount and when filters change
   useEffect(() => {
-    let isMounted = true;
-
-    const loadSubmissions = async () => {
-      const result = await fetchSubmissions();
-      if (isMounted && result) {
-        setTotalItems(result.total || 0);
-      }
-    };
-
-    loadSubmissions();
-
-    return () => {
-      isMounted = false;
-    };
+    fetchSubmissions();
   }, [fetchSubmissions]);
 
-  // Clear error on unmount
+  // Clear error and current submission on unmount
   useEffect(() => {
     return () => {
       dispatch(clearError());
+      dispatch(clearCurrentSubmission());
     };
   }, [dispatch]);
 
-  // View submission details
+  // View submission details — reads from slice's currentSubmission, not local state
   const handleViewSubmission = async (submission: StationRequirementSummary) => {
     setViewError(null);
     let submissionId = submission.id;
@@ -105,11 +74,9 @@ const AdminSubmissions: React.FC = () => {
     setIsModalOpen(true);
 
     try {
-      const result = await dispatch(getSubmissionById(submissionId)).unwrap();
-      setSelectedSubmission(result.submission);
+      await dispatch(getSubmissionById(submissionId)).unwrap();
       setViewError(null);
     } catch {
-      setSelectedSubmission(null);
       setViewError('Failed to load submission details. Please try again.');
     } finally {
       setIsLoadingDetails(false);
@@ -118,43 +85,35 @@ const AdminSubmissions: React.FC = () => {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedSubmission(null);
     setViewError(null);
+    dispatch(clearCurrentSubmission());
   };
 
   const handleApplyFilters = () => {
-    setFilters({
-      ...filters,
-      station: searchTerm.trim(),
-      page: 1,
-    });
+    setStationFilter(searchTerm.trim());
+    dispatch(setPage(1));
   };
 
   const handleClearFilters = () => {
     setSearchTerm('');
-    setFilters({
-      station: '',
-      page: 1,
-      limit: 20,
-    });
+    setStationFilter('');
+    dispatch(resetPagination());
   };
 
   const handlePageChange = (newPage: number) => {
-    const totalPages = Math.ceil(totalItems / filters.limit);
+    const totalPages = Math.ceil(pagination.total / pagination.limit);
     if (newPage >= 1 && newPage <= totalPages) {
-      setFilters({ ...filters, page: newPage });
+      dispatch(setPage(newPage));
     }
   };
 
   const handleLimitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setFilters({
-      ...filters,
-      limit: Number(e.target.value),
-      page: 1,
-    });
+    dispatch(setLimit(Number(e.target.value)));
+    dispatch(setPage(1));
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return '—';
     try {
       return new Date(dateString).toLocaleDateString('en-KE', {
         year: 'numeric',
@@ -191,9 +150,9 @@ const AdminSubmissions: React.FC = () => {
     );
   }
 
-  const totalPages = Math.ceil(totalItems / filters.limit);
-  const startIndex = (filters.page - 1) * filters.limit + 1;
-  const endIndex = Math.min(filters.page * filters.limit, totalItems);
+  const totalPages = Math.ceil(pagination.total / pagination.limit);
+  const startIndex = (pagination.page - 1) * pagination.limit + 1;
+  const endIndex = Math.min(pagination.page * pagination.limit, pagination.total);
 
   return (
     <div className="min-h-screen bg-[#f7f5f0] text-slate-800 antialiased pb-12">
@@ -271,9 +230,9 @@ const AdminSubmissions: React.FC = () => {
         {/* Table Toolbar / Summary */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 px-1">
           <div className="text-sm text-slate-600 font-medium">
-            Showing <span className="text-slate-900 font-semibold">{totalItems > 0 ? startIndex : 0}</span> to{' '}
+            Showing <span className="text-slate-900 font-semibold">{pagination.total > 0 ? startIndex : 0}</span> to{' '}
             <span className="text-slate-900 font-semibold">{endIndex}</span> of{' '}
-            <span className="text-slate-900 font-semibold">{totalItems}</span> submissions
+            <span className="text-slate-900 font-semibold">{pagination.total}</span> submissions
           </div>
 
           <div className="flex items-center gap-2">
@@ -282,7 +241,7 @@ const AdminSubmissions: React.FC = () => {
             </label>
             <select
               id="limitSelect"
-              value={filters.limit}
+              value={pagination.limit}
               onChange={handleLimitChange}
               className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
             >
@@ -326,7 +285,7 @@ const AdminSubmissions: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-200/70 text-sm">
                     {submissions.map((submission: StationRequirementSummary, index: number) => {
-                      const globalIndex = (filters.page - 1) * filters.limit + index + 1;
+                      const globalIndex = (pagination.page - 1) * pagination.limit + index + 1;
 
                       return (
                         <tr
@@ -364,20 +323,20 @@ const AdminSubmissions: React.FC = () => {
               {totalPages > 1 && (
                 <div className="bg-slate-50/80 border-t border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-xs text-slate-500 font-medium">
-                    Page <span className="font-semibold text-slate-800">{filters.page}</span> of{' '}
+                    Page <span className="font-semibold text-slate-800">{pagination.page}</span> of{' '}
                     <span className="font-semibold text-slate-800">{totalPages}</span>
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handlePageChange(filters.page - 1)}
-                      disabled={filters.page === 1}
+                      onClick={() => handlePageChange(pagination.page - 1)}
+                      disabled={pagination.page === 1}
                       className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       Previous
                     </button>
                     <button
-                      onClick={() => handlePageChange(filters.page + 1)}
-                      disabled={filters.page === totalPages}
+                      onClick={() => handlePageChange(pagination.page + 1)}
+                      disabled={pagination.page === totalPages}
                       className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       Next
@@ -394,7 +353,7 @@ const AdminSubmissions: React.FC = () => {
           <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Submissions</div>
-              <div className="text-2xl font-extrabold text-slate-900 mt-1">{totalItems}</div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1">{pagination.total}</div>
             </div>
             <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
               📊
@@ -419,7 +378,7 @@ const AdminSubmissions: React.FC = () => {
         </p>
       </div>
 
-      {/* Modal Visual Overhaul */}
+      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           {/* Backdrop */}
@@ -436,7 +395,7 @@ const AdminSubmissions: React.FC = () => {
                 <div>
                   <h2 className="text-xl font-bold text-white">Submission Details</h2>
                   <p className="text-xs text-[#cdd6e0] mt-1 font-medium">
-                    {selectedSubmission?.station ? `Station: ${selectedSubmission.station}` : 'Loading station context...'}
+                    {currentSubmission?.station ? `Station: ${currentSubmission.station}` : 'Loading station context...'}
                   </p>
                 </div>
                 <button
@@ -467,23 +426,23 @@ const AdminSubmissions: React.FC = () => {
                     <div className="w-10 h-10 border-4 border-[#1e3a5f]/20 border-t-[#1e3a5f] rounded-full animate-spin mx-auto"></div>
                     <p className="mt-4 text-xs font-medium text-slate-500">Retrieving detail breakdown...</p>
                   </div>
-                ) : selectedSubmission ? (
+                ) : currentSubmission ? (
                   <div className="space-y-6">
                     
                     {/* Metadata Header Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Station</p>
-                        <p className="font-semibold text-slate-900 text-sm mt-0.5">{selectedSubmission.station}</p>
+                        <p className="font-semibold text-slate-900 text-sm mt-0.5">{currentSubmission.station}</p>
                       </div>
                       <div className="bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted Date</p>
-                        <p className="font-semibold text-slate-900 text-sm mt-0.5">{formatDate(selectedSubmission.submittedAt)}</p>
+                        <p className="font-semibold text-slate-900 text-sm mt-0.5">{formatDate(currentSubmission.submittedAt)}</p>
                       </div>
                       <div className="bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted By</p>
                         <p className="font-semibold text-slate-900 text-sm mt-0.5 truncate">
-                          {selectedSubmission.submitterName || selectedSubmission.submitterEmail || 'Unknown User'}
+                          {currentSubmission.submitterName || currentSubmission.submitterEmail || 'Unknown User'}
                         </p>
                       </div>
                     </div>
@@ -495,11 +454,11 @@ const AdminSubmissions: React.FC = () => {
                           File Folders Items
                         </h3>
                         <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-bold">
-                          {selectedSubmission.fileFolders.length} Item(s)
+                          {currentSubmission.fileFolders.length} Item(s)
                         </span>
                       </div>
 
-                      {selectedSubmission.fileFolders.length === 0 ? (
+                      {currentSubmission.fileFolders.length === 0 ? (
                         <div className="p-8 text-center text-slate-400 text-xs italic">
                           No file folders requested in this submission.
                         </div>
@@ -513,7 +472,7 @@ const AdminSubmissions: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {selectedSubmission.fileFolders.map((item, idx) => (
+                            {currentSubmission.fileFolders.map((item, idx) => (
                               <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
                                 <td className="px-5 py-3 text-slate-500 font-medium">{item.division}</td>
                                 <td className="px-5 py-3 text-slate-800 font-semibold">{item.name}</td>
@@ -532,7 +491,7 @@ const AdminSubmissions: React.FC = () => {
                         <p className="text-xs text-[#cdd6e0]">Aggregated file folder count</p>
                       </div>
                       <div className="text-2xl font-black text-white">
-                        {selectedSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}
+                        {currentSubmission.fileFolders.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}
                       </div>
                     </div>
                   </div>
