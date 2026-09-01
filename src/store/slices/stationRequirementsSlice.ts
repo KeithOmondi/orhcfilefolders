@@ -125,6 +125,7 @@ export const CASE_REGISTERS: Record<string, string[]> = {
 };
 
 // --- ADDITIONAL REGISTERS ---
+// ✅ Updated with Injunction Register
 export const ADDITIONAL_REGISTERS = [
   "File Movement Register",
   "Accession Register",
@@ -132,6 +133,7 @@ export const ADDITIONAL_REGISTERS = [
   "Exhibit Register",
   "Court Assistants Exhibit Register",
   "Certified Urgent Applications Tracking Register",
+  "Injunction Register", // ✅ Added here
   "Tracking Register for High Court Appeal Pending Due to Lack of Lower Court Record",
   "Tracking Registers for Appeals to Court of Appeal",
 ] as const;
