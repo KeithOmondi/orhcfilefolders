@@ -196,6 +196,7 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(editMode);
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Sync form state from initialSubmission/currentSubmission during render
   const [syncedId, setSyncedId] = useState<string | undefined>(
@@ -214,6 +215,7 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
           
           if (submission.status !== 'draft') {
             setErrorMessage('This submission has already been submitted and cannot be edited.');
+            setIsSubmitted(true);
             setIsLoadingDraft(false);
             return;
           }
@@ -229,6 +231,7 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
           setRegisterValues(regValues);
           setIsEditing(true);
           setSyncedId(loadDraftId);
+          setIsSubmitted(false);
           
           if (onDraftLoaded) {
             onDraftLoaded(submission);
@@ -264,6 +267,9 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
       setFileFolderValues(ffValues);
       setRegisterValues(regValues);
       setIsEditing(true);
+      if (submission.status === 'submitted') {
+        setIsSubmitted(true);
+      }
     }
   }
 
@@ -283,6 +289,7 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   }, [dispatch, editMode, loadDraftId]);
 
   const handleFileFolderChange = (division: string, name: string, value: number): void => {
+    if (isSubmitted) return;
     setFileFolderValues((prev) => ({
       ...prev,
       [division]: { ...prev[division], [name]: Math.max(0, value) },
@@ -290,6 +297,7 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   };
 
   const handleRegisterChange = (division: string, name: string, value: number): void => {
+    if (isSubmitted) return;
     setRegisterValues((prev) => ({
       ...prev,
       [division]: { ...prev[division], [name]: Math.max(0, value) },
@@ -297,6 +305,7 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
+    if (isSubmitted) return;
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -319,111 +328,122 @@ const DrRequirementsForm: React.FC<RequirementsFormProps> = ({
   };
 
   const handleNextStep = (): void => {
+    if (isSubmitted) return;
     setCurrentStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handlePrevStep = (): void => {
+    if (isSubmitted) return;
     setCurrentStep(1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSaveDraft = async (): Promise<void> => {
-    await handleSubmit('draft');
-  };
+  // Confirmation dialog for submit
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const handleSubmitDraft = async (): Promise<void> => {
+    // Show confirmation dialog
+    setShowConfirmDialog(true);
+  };
+
+  const confirmSubmit = async (): Promise<void> => {
+    setShowConfirmDialog(false);
     await handleSubmit('submitted');
   };
 
-// DrRequirementsForm.tsx - Updated handleSubmit function
+  const cancelSubmit = (): void => {
+    setShowConfirmDialog(false);
+  };
 
-const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
-  setErrorMessage(null);
-  setShowSuccess(false);
+  const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
+    setErrorMessage(null);
+    setShowSuccess(false);
 
-  if (!formData.station.trim()) {
-    setErrorMessage('Please enter a station name.');
-    return;
-  }
-
-  const data = collectData();
-  const hasFileItems = data.fileFolders.length > 0;
-  const hasRegisterItems = data.registers.length > 0;
-  const hasItems = hasFileItems || hasRegisterItems;
-
-  if (!hasItems) {
-    setErrorMessage('Enter at least one quantity greater than 0 in either File Folders or Registers.');
-    return;
-  }
-
-  if (status === 'submitted' && !hasItems) {
-    setErrorMessage('Please add at least one item before submitting.');
-    return;
-  }
-
-  console.log(`📤 ${status === 'draft' ? 'Saving draft' : 'Submitting'} station requirements:`, {
-    station: data.station,
-    fileFolders: data.fileFolders,
-    registers: data.registers,
-    status,
-  });
-
-  try {
-    let result;
-
-    // Check if we're editing an existing submission
-    const existingId = submissionId || syncedId;
-    
-    if (isEditing && existingId) {
-      // Update existing submission - id is guaranteed to be a string here
-      const payload = {
-        id: existingId, // This is now definitely a string
-        station: data.station,
-        fileFolders: data.fileFolders,
-        registers: data.registers,
-        status,
-      };
-      result = await dispatch(updateSubmission(payload)).unwrap();
-      setSuccessMessage(status === 'draft' ? 'Draft updated successfully!' : 'Submission updated and submitted successfully!');
-    } else {
-      // Create new submission
-      const payload = {
-        station: data.station,
-        fileFolders: data.fileFolders,
-        registers: data.registers,
-        status,
-      };
-      result = await dispatch(createSubmission(payload)).unwrap();
-      setSuccessMessage(status === 'draft' ? 'Draft saved successfully!' : 'Submission submitted successfully!');
+    if (isSubmitted) {
+      setErrorMessage('This submission has already been submitted and cannot be modified.');
+      return;
     }
 
-    console.log('✅ Submission successful:', result);
-
-    setShowSuccess(true);
-
-    // Reset form if not editing and it's a draft
-    if (!isEditing && status === 'draft') {
-      setFileFolderValues(buildInitialFileFolderValues());
-      setRegisterValues(buildInitialRegisterValues());
-      setFormData(prev => ({ ...prev, status: 'draft' }));
-      setCurrentStep(1);
+    if (!formData.station.trim()) {
+      setErrorMessage('Please enter a station name.');
+      return;
     }
 
-    setTimeout(() => {
-      setShowSuccess(false);
-      setSuccessMessage('');
-    }, 5000);
+    const data = collectData();
+    const hasFileItems = data.fileFolders.length > 0;
+    const hasRegisterItems = data.registers.length > 0;
+    const hasItems = hasFileItems || hasRegisterItems;
 
-    if (onSubmitted) {
-      onSubmitted();
+    if (!hasItems) {
+      setErrorMessage('Enter at least one quantity greater than 0 in either File Folders or Registers.');
+      return;
     }
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Failed to save submission. Please try again.';
-    console.error('❌ Submission error:', err);
-    setErrorMessage(errorMsg);
-  }
-};
+
+    if (status === 'submitted' && !hasItems) {
+      setErrorMessage('Please add at least one item before submitting.');
+      return;
+    }
+
+    console.log(`📤 Submitting station requirements:`, {
+      station: data.station,
+      fileFolders: data.fileFolders,
+      registers: data.registers,
+      status,
+    });
+
+    try {
+      let result;
+
+      // Check if we're editing an existing submission
+      const existingId = submissionId || syncedId;
+      
+      if (isEditing && existingId) {
+        // Update existing submission - id is guaranteed to be a string here
+        const payload = {
+          id: existingId,
+          station: data.station,
+          fileFolders: data.fileFolders,
+          registers: data.registers,
+          status,
+        };
+        result = await dispatch(updateSubmission(payload)).unwrap();
+        setSuccessMessage('Submission submitted successfully!');
+      } else {
+        // Create new submission
+        const payload = {
+          station: data.station,
+          fileFolders: data.fileFolders,
+          registers: data.registers,
+          status,
+        };
+        result = await dispatch(createSubmission(payload)).unwrap();
+        setSuccessMessage('Submission submitted successfully!');
+      }
+
+      console.log('✅ Submission successful:', result);
+
+      // Lock the form after successful submission
+      setIsSubmitted(true);
+      setShowSuccess(true);
+
+      // Update form data status
+      setFormData(prev => ({ ...prev, status: 'submitted' }));
+
+      setTimeout(() => {
+        setShowSuccess(false);
+        setSuccessMessage('');
+      }, 5000);
+
+      if (onSubmitted) {
+        onSubmitted();
+      }
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to save submission. Please try again.';
+      console.error('❌ Submission error:', err);
+      setErrorMessage(errorMsg);
+    }
+  };
 
   const renderCategorySection = (
     values: CategoryValues,
@@ -488,8 +508,11 @@ const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
                     step="1"
                     value={values[division]?.[item] || 0}
                     onChange={(e) => onChange(division, item, parseInt(e.target.value, 10) || 0)}
-                    className="w-24 px-3 py-2 border border-gray-300 rounded-md text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-24 px-3 py-2 border border-gray-300 rounded-md text-right focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      isSubmitted ? 'bg-gray-100 cursor-not-allowed' : ''
+                    }`}
                     placeholder="0"
+                    disabled={isSubmitted}
                   />
                 </div>
               );
@@ -540,44 +563,53 @@ const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
             Data Collection · Ref RHC/DSCM/112
           </div>
           <h1 className="text-2xl font-semibold mb-2">
-            {isEditing ? 'Edit Draft' : 'Station Requirement Form'}
+            {isSubmitted ? 'Submission Complete' : (isEditing ? 'Edit Draft' : 'Station Requirement Form')}
           </h1>
-          {isEditing && (
+          {isEditing && !isSubmitted && (
             <div className="text-sm text-[#c9b98a] mb-2">
               Editing draft for {currentSubmission?.station || formData.station}
             </div>
           )}
-          <div className="flex items-center gap-4 mt-2">
-            <span className="text-sm text-[#c9b98a]">
-              Step {currentStep} of 2: {currentStep === 1 ? 'File Folders' : 'Registers'}
-            </span>
-            <div className="flex gap-2">
-              <div className={`w-3 h-3 rounded-full ${currentStep === 1 ? 'bg-[#a3782e]' : 'bg-gray-500'}`} />
-              <div className={`w-3 h-3 rounded-full ${currentStep === 2 ? 'bg-[#a3782e]' : 'bg-gray-500'}`} />
+          {isSubmitted && (
+            <div className="text-sm text-green-300 mb-2">
+              ✓ This submission has been successfully submitted and is now locked.
             </div>
-          </div>
+          )}
+          {!isSubmitted && (
+            <div className="flex items-center gap-4 mt-2">
+              <span className="text-sm text-[#c9b98a]">
+                Step {currentStep} of 2: {currentStep === 1 ? 'File Folders' : 'Registers'}
+              </span>
+              <div className="flex gap-2">
+                <div className={`w-3 h-3 rounded-full ${currentStep === 1 ? 'bg-[#a3782e]' : 'bg-gray-500'}`} />
+                <div className={`w-3 h-3 rounded-full ${currentStep === 2 ? 'bg-[#a3782e]' : 'bg-gray-500'}`} />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Instructions */}
-        <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8 text-sm text-gray-700 space-y-3">
-          <p>
-            To facilitate effective planning and ensure adequate provision of registry supplies, we
-            request Your Honours to indicate your station/sub-registry&rsquo;s <strong>ANNUAL</strong> requirements
-            for file folders and case registers.
-          </p>
-          <p>
-            Kindly indicate the required quantity for each category, based on
-            the number and nature of cases filed at your station/division/sub-registry.
-          </p>
-          <p>
-            Please indicate &ldquo;0&rdquo; where a particular item is not applicable to your
-            station/division/sub-registry.
-          </p>
-          <p>
-            For any clarifications, please reach out to Hon. Linda Mumassabba from our Office.
-          </p>
-          <p className="font-semibold">RHC</p>
-        </div>
+        {/* Instructions - Hide when submitted */}
+        {!isSubmitted && (
+          <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8 text-sm text-gray-700 space-y-3">
+            <p>
+              To facilitate effective planning and ensure adequate provision of registry supplies, we
+              request Your Honours to indicate your station/sub-registry&rsquo;s <strong>ANNUAL</strong> requirements
+              for file folders and case registers.
+            </p>
+            <p>
+              Kindly indicate the required quantity for each category, based on
+              the number and nature of cases filed at your station/division/sub-registry.
+            </p>
+            <p>
+              Please indicate &ldquo;0&rdquo; where a particular item is not applicable to your
+              station/division/sub-registry.
+            </p>
+            <p>
+              For any clarifications, please reach out to Hon. Linda Mumassabba from our Office.
+            </p>
+            <p className="font-semibold">RHC</p>
+          </div>
+        )}
 
         {/* Station Info */}
         <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8">
@@ -593,8 +625,10 @@ const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
                 value={formData.station}
                 onChange={handleInputChange}
                 placeholder="e.g. Kisumu Law Courts"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={!!user?.station || isEditing}
+                className={`w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  isSubmitted || !!user?.station || isEditing ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isSubmitted || !!user?.station || isEditing}
               />
             </div>
             <div>
@@ -606,8 +640,10 @@ const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={isEditing && currentSubmission?.status === 'submitted'}
+                className={`w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  isSubmitted || (isEditing && currentSubmission?.status === 'submitted') ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isSubmitted || (isEditing && currentSubmission?.status === 'submitted')}
               >
                 <option value="draft">Draft</option>
                 <option value="submitted">Ready to Submit</option>
@@ -646,53 +682,48 @@ const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
           </div>
         )}
 
-        {/* Navigation Buttons */}
-        <div className="flex justify-between items-center mb-6">
-          {currentStep === 2 && (
-            <button
-              onClick={handlePrevStep}
-              className="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-md hover:bg-gray-400 transition-colors"
-            >
-              ← Previous (File Folders)
-            </button>
-          )}
-          {currentStep === 1 && (
-            <button
-              onClick={handleNextStep}
-              className="px-6 py-2 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors ml-auto"
-            >
-              Next (Registers) →
-            </button>
-          )}
-        </div>
+        {/* Navigation Buttons - Hide when submitted */}
+        {!isSubmitted && (
+          <div className="flex justify-between items-center mb-6">
+            {currentStep === 2 && (
+              <button
+                onClick={handlePrevStep}
+                className="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-md hover:bg-gray-400 transition-colors"
+              >
+                ← Previous (File Folders)
+              </button>
+            )}
+            {currentStep === 1 && (
+              <button
+                onClick={handleNextStep}
+                className="px-6 py-2 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors ml-auto"
+              >
+                Next (Registers) →
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex flex-wrap gap-4 items-center">
-          {!isEditing && (
+          {/* Submit Button - Only show if not submitted */}
+          {!isSubmitted && (
             <button
-              onClick={handleSaveDraft}
-              disabled={isSubmitting}
-              className="px-6 py-3 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleSubmitDraft}
+              disabled={isSubmitting || totalItems === 0}
+              className="px-6 py-3 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Saving...' : 'Save Draft'}
+              {isSubmitting ? 'Submitting...' : (isEditing ? 'Submit Draft' : 'Submit')}
             </button>
           )}
-          {isEditing && (
-            <button
-              onClick={handleSaveDraft}
-              disabled={isSubmitting}
-              className="px-6 py-3 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Saving...' : 'Update Draft'}
-            </button>
+
+          {/* Submitted status message */}
+          {isSubmitted && (
+            <div className="bg-green-50 border border-green-300 text-green-800 px-6 py-3 rounded-md text-sm font-semibold">
+              ✓ This form has been submitted and is locked
+            </div>
           )}
-          <button
-            onClick={handleSubmitDraft}
-            disabled={isSubmitting || totalItems === 0}
-            className="px-6 py-3 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Submitting...' : (isEditing ? 'Submit Draft' : 'Submit')}
-          </button>
+
           {showSuccess && (
             <div className="bg-green-50 border border-green-300 text-green-800 px-4 py-2 rounded-md text-sm">
               ✓ {successMessage}
@@ -709,6 +740,33 @@ const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
             </div>
           )}
         </div>
+
+        {/* Confirmation Dialog */}
+        {showConfirmDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Submission</h3>
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to submit this form? <br />
+                <span className="font-semibold text-red-600">The page will be locked immediately after submission.</span>
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={cancelSubmit}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmSubmit}
+                  className="px-4 py-2 bg-[#1e3a5f] text-white font-semibold rounded-md hover:bg-[#12253d] transition-colors"
+                >
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Summary */}
         <div className="mt-8 bg-white border border-gray-300 rounded-lg p-6">
@@ -729,9 +787,9 @@ const handleSubmit = async (status: SubmissionStatus): Promise<void> => {
             <div>
               <span className="text-gray-600">Status:</span>
               <span className={`ml-2 font-semibold ${
-                formData.status === 'submitted' ? 'text-green-600' : 'text-yellow-600'
+                isSubmitted || formData.status === 'submitted' ? 'text-green-600' : 'text-yellow-600'
               }`}>
-                {formData.status === 'submitted' ? 'Ready to Submit' : 'Draft'}
+                {isSubmitted || formData.status === 'submitted' ? 'Submitted' : 'Draft'}
               </span>
             </div>
           </div>
