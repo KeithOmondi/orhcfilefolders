@@ -8,7 +8,11 @@ import {
   setPage,
   setLimit,
   resetPagination,
+  downloadReport,
+  deleteSubmission,
   type StationRequirementSummary,
+  type ReportFormat,
+  type DownloadReportParams,
 } from '../../store/slices/stationRequirementsSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 
@@ -22,9 +26,27 @@ type FetchSubmissionsParams = {
   adminView?: boolean;
 };
 
+// Status filter options - match backend StationStatus type
+const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'All Statuses' },
+  { value: 'not_started', label: 'Not Started' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'pending_review', label: 'Pending Review' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'needs_revision', label: 'Needs Revision' },
+];
+
 const AdminSubmissions: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { submissions, currentSubmission, isLoading, error, pagination } = useSelector(
+  const { 
+    submissions, 
+    currentSubmission, 
+    isLoading, 
+    error, 
+    pagination,
+    isDownloading,
+  } = useSelector(
     (state: RootState) => state.stationRequirements
   );
   const { accessToken, isInitializing, user } = useSelector((state: RootState) => state.auth);
@@ -38,11 +60,23 @@ const AdminSubmissions: React.FC = () => {
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
   const [viewError, setViewError] = useState<string | null>(null);
 
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<StationRequirementSummary | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Report download state
+  const [reportFormat, setReportFormat] = useState<ReportFormat>('pdf');
+  const [reportDateFrom, setReportDateFrom] = useState<string>('');
+  const [reportDateTo, setReportDateTo] = useState<string>('');
+  const [reportStatus, setReportStatus] = useState<string>('');
+  const [showReportOptions, setShowReportOptions] = useState<boolean>(false);
+
   // Check if user is admin
   const isAdmin = user?.role === 'admin';
 
   // Fetch submissions — page/limit come from the slice's own pagination state
-  const fetchSubmissions = useCallback(() => {
+  const fetchSubmissions = useCallback((): void => {
     if (!accessToken || isInitializing) return;
 
     // For admin users, set adminView: true to see all submissions including drafts
@@ -76,7 +110,7 @@ const AdminSubmissions: React.FC = () => {
   }, [dispatch]);
 
   // View submission details — reads from slice's currentSubmission, not local state
-  const handleViewSubmission = async (submission: StationRequirementSummary) => {
+  const handleViewSubmission = async (submission: StationRequirementSummary): Promise<void> => {
     setViewError(null);
     let submissionId: string | undefined = submission.id;
 
@@ -113,6 +147,38 @@ const AdminSubmissions: React.FC = () => {
     dispatch(clearCurrentSubmission());
   };
 
+  // --- Delete Handlers ---
+  const handleDeleteClick = (submission: StationRequirementSummary): void => {
+    setDeleteTarget(submission);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!deleteTarget?.id) {
+      setIsDeleteModalOpen(false);
+      setDeleteTarget(null);
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await dispatch(deleteSubmission(deleteTarget.id)).unwrap();
+      setIsDeleteModalOpen(false);
+      setDeleteTarget(null);
+      // Refresh the list after deletion
+      fetchSubmissions();
+    } catch (err) {
+      console.error('Failed to delete submission:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDelete = (): void => {
+    setIsDeleteModalOpen(false);
+    setDeleteTarget(null);
+  };
+
   const handleApplyFilters = (): void => {
     setStationFilter(searchTerm.trim());
     dispatch(setPage(1));
@@ -134,6 +200,52 @@ const AdminSubmissions: React.FC = () => {
   const handleLimitChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     dispatch(setLimit(Number(e.target.value)));
     dispatch(setPage(1));
+  };
+
+  // --- Report Download Handlers ---
+  const handleDownloadReport = async (): Promise<void> => {
+    try {
+      // Build params - only include non-empty values
+      const params: DownloadReportParams = {
+        format: reportFormat,
+      };
+      
+      if (reportDateFrom) params.fromDate = reportDateFrom;
+      if (reportDateTo) params.toDate = reportDateTo;
+      if (reportStatus) params.status = reportStatus;
+
+      console.log('📤 Downloading report with params:', params);
+
+      const blob = await dispatch(downloadReport(params)).unwrap();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = reportFormat === 'pdf' ? 'pdf' : 'doc';
+      link.download = `station-requirements-report-${new Date().toISOString().split('T')[0]}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setShowReportOptions(false);
+    } catch (err) {
+      console.error('Failed to download report:', err);
+      // Error will be handled by the slice
+    }
+  };
+
+  const toggleReportOptions = (): void => {
+    setShowReportOptions(!showReportOptions);
+    if (!showReportOptions) {
+      // Set default dates for last 30 days
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      setReportDateTo(today.toISOString().split('T')[0]);
+      setReportDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
+    }
   };
 
   const formatDate = (dateString?: string): string => {
@@ -286,21 +398,140 @@ const AdminSubmissions: React.FC = () => {
             <span className="text-slate-900 font-semibold">{pagination.total}</span> submissions
           </div>
 
-          <div className="flex items-center gap-2">
-            <label htmlFor="limitSelect" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Rows per page:
-            </label>
-            <select
-              id="limitSelect"
-              value={pagination.limit}
-              onChange={handleLimitChange}
-              className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label htmlFor="limitSelect" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Rows:
+              </label>
+              <select
+                id="limitSelect"
+                value={pagination.limit}
+                onChange={handleLimitChange}
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {/* Download Report Button - Admin Only */}
+            {isAdmin && (
+              <div className="relative">
+                <button
+                  onClick={toggleReportOptions}
+                  disabled={isDownloading}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium text-sm rounded-lg transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                >
+                  {isDownloading ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download Report
+                    </>
+                  )}
+                </button>
+
+                {/* Report Options Dropdown */}
+                {showReportOptions && !isDownloading && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-4 z-20">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-sm font-bold text-slate-800">Report Options</h4>
+                      <button
+                        onClick={() => setShowReportOptions(false)}
+                        className="text-slate-400 hover:text-slate-600 text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* Format Selection */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Format</label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setReportFormat('pdf')}
+                            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                              reportFormat === 'pdf'
+                                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                            }`}
+                            type="button"
+                          >
+                            PDF
+                          </button>
+                          <button
+                            onClick={() => setReportFormat('docx')}
+                            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                              reportFormat === 'docx'
+                                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                            }`}
+                            type="button"
+                          >
+                            Word (DOCX)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Date Range */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1">From Date</label>
+                          <input
+                            type="date"
+                            value={reportDateFrom}
+                            onChange={(e) => setReportDateFrom(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1">To Date</label>
+                          <input
+                            type="date"
+                            value={reportDateTo}
+                            onChange={(e) => setReportDateTo(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Status Filter - Using correct status values */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
+                        <select
+                          value={reportStatus}
+                          onChange={(e) => setReportStatus(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                        >
+                          {STATUS_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={handleDownloadReport}
+                        className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                        type="button"
+                      >
+                        Generate Report
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -333,7 +564,7 @@ const AdminSubmissions: React.FC = () => {
                       <th className="px-6 py-3.5 text-right">Registers</th>
                       <th className="px-6 py-3.5">Status</th>
                       <th className="px-6 py-3.5">Submitted At</th>
-                      <th className="px-6 py-3.5 text-center w-40">Action</th>
+                      <th className="px-6 py-3.5 text-center w-52">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/70 text-sm">
@@ -366,12 +597,24 @@ const AdminSubmissions: React.FC = () => {
                             {formatDate(submission.submittedAt || submission.updatedAt)}
                           </td>
                           <td className="px-6 py-4 text-center whitespace-nowrap">
-                            <button
-                              onClick={() => handleViewSubmission(submission)}
-                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-md text-xs font-semibold text-[#1e3a5f] bg-[#1e3a5f]/5 hover:bg-[#1e3a5f] hover:text-white transition-all"
-                            >
-                              View Details
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleViewSubmission(submission)}
+                                className="inline-flex items-center justify-center px-3 py-1.5 rounded-md text-xs font-semibold text-[#1e3a5f] bg-[#1e3a5f]/5 hover:bg-[#1e3a5f] hover:text-white transition-all"
+                                type="button"
+                              >
+                                View
+                              </button>
+                              {isAdmin && (
+                                <button
+                                  onClick={() => handleDeleteClick(submission)}
+                                  className="inline-flex items-center justify-center px-3 py-1.5 rounded-md text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white transition-all"
+                                  type="button"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -392,6 +635,7 @@ const AdminSubmissions: React.FC = () => {
                       onClick={() => handlePageChange(pagination.page - 1)}
                       disabled={pagination.page === 1}
                       className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+                      type="button"
                     >
                       Previous
                     </button>
@@ -399,6 +643,7 @@ const AdminSubmissions: React.FC = () => {
                       onClick={() => handlePageChange(pagination.page + 1)}
                       disabled={pagination.page === totalPages}
                       className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+                      type="button"
                     >
                       Next
                     </button>
@@ -451,10 +696,9 @@ const AdminSubmissions: React.FC = () => {
         </p>
       </div>
 
-      {/* Modal */}
+      {/* View Details Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Backdrop */}
           <div
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={handleCloseModal}
@@ -490,6 +734,7 @@ const AdminSubmissions: React.FC = () => {
                     <button
                       onClick={handleCloseModal}
                       className="mt-4 px-4 py-2 bg-[#1e3a5f] text-white text-xs font-semibold rounded-lg hover:bg-[#12253d] transition-colors"
+                      type="button"
                     >
                       Dismiss
                     </button>
@@ -618,11 +863,67 @@ const AdminSubmissions: React.FC = () => {
                 <button
                   onClick={handleCloseModal}
                   className="px-5 py-2 bg-[#1e3a5f] hover:bg-[#12253d] text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
+                  type="button"
                 >
                   Close Window
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && deleteTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={handleCancelDelete}
+          ></div>
+
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full border border-slate-200">
+              <div className="p-6">
+                <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-rose-100 text-rose-600">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+
+                <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Confirm Delete</h3>
+                <p className="text-sm text-slate-600 text-center mb-1">
+                  Are you sure you want to delete the submission for <strong>{deleteTarget.station}</strong>?
+                </p>
+                <p className="text-xs text-slate-500 text-center mb-6">
+                  This action cannot be undone.
+                </p>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelDelete}
+                    className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors"
+                    type="button"
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDelete}
+                    className="flex-1 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    type="button"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></span>
+                        Deleting...
+                      </>
+                    ) : (
+                      'Delete Submission'
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

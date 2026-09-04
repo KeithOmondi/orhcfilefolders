@@ -214,7 +214,7 @@ export const CASE_COLORS: Record<string, string> = {
   "Anti-Corruption & Economic Crimes_Suit": "Maroon",
   "Anti-Corruption & Economic Crimes_Revision": "Neon Green",
   "Anti-Corruption & Economic Crimes_Miscellaneous": "Orange",
-  "Anti-Corruption & Economic Crimes_Petitions": "Red",
+  "Anti-Corruption & Economic Crimes_Petitions": "Lime Green", // ✅ FIXED
 
   // Commercial & Tax
   "Commercial & Tax_Commercial Civil Matters": "Light Purple",
@@ -457,6 +457,16 @@ export interface AdminReviewQueue {
   total: number;
 }
 
+// --- Report Download Types ---
+export type ReportFormat = "pdf" | "docx";
+
+export interface DownloadReportParams {
+  format?: ReportFormat;
+  fromDate?: string;
+  toDate?: string;
+  status?: string;
+}
+
 interface ApiErrorResponse {
   message?: string;
   status?: string;
@@ -476,6 +486,7 @@ interface StationRequirementsState {
   isLoading: boolean;
   isSubmitting: boolean;
   isReviewing: boolean;
+  isDownloading: boolean;
   error: string | null;
   pagination: {
     page: number;
@@ -498,6 +509,7 @@ const initialState: StationRequirementsState = {
   isLoading: false,
   isSubmitting: false,
   isReviewing: false,
+  isDownloading: false,
   error: null,
   pagination: {
     page: 1,
@@ -699,7 +711,6 @@ export const getSubmissions = createAsyncThunk<
 );
 
 // Get station report (admin only)
-
 export const getStationReport = createAsyncThunk<
   { report: StationReport },
   {
@@ -1019,6 +1030,46 @@ export const getMySubmissions = createAsyncThunk<
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
         return rejectWithValue(
           err.response?.data?.message || "Failed to fetch your submissions.",
+        );
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  },
+);
+
+// --- DOWNLOAD REPORT ---
+export const downloadReport = createAsyncThunk<
+  Blob,
+  DownloadReportParams,
+  { rejectValue: string }
+>(
+  "stationRequirements/downloadReport",
+  async (params, { rejectWithValue }) => {
+    try {
+      const cleanParams: Record<string, string> = {};
+      
+      if (params.format) cleanParams.format = params.format;
+      if (params.fromDate) cleanParams.fromDate = params.fromDate;
+      if (params.toDate) cleanParams.toDate = params.toDate;
+      if (params.status) cleanParams.status = params.status;
+
+      console.log("📤 Downloading report with params:", cleanParams);
+
+      const response = await axiosClient.get(
+        "/station-requirements/download-report",
+        {
+          params: cleanParams,
+          responseType: "blob",
+        },
+      );
+
+      console.log("✅ Report downloaded successfully");
+      return response.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to download report:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to download report.",
         );
       }
       return rejectWithValue("An unexpected error occurred.");
@@ -1415,6 +1466,19 @@ const stationRequirementsSlice = createSlice({
         // Keep local fallback data
         state.registerCategories = getAllValidRegisters();
         state.registers = getAllRegistersFlat();
+      })
+
+      // --- downloadReport ---
+      .addCase(downloadReport.pending, (state) => {
+        state.isDownloading = true;
+        state.error = null;
+      })
+      .addCase(downloadReport.fulfilled, (state) => {
+        state.isDownloading = false;
+      })
+      .addCase(downloadReport.rejected, (state, action) => {
+        state.isDownloading = false;
+        state.error = action.payload || "Failed to download report";
       });
   },
 });
