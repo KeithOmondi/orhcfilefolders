@@ -16,47 +16,30 @@ const DrDashboard: React.FC = () => {
   );
   const { user, accessToken, isInitializing } = useSelector((state: RootState) => state.auth);
 
-  // Calculate stats using useMemo
+  // Calculate stats using useMemo - Simplified: Only Draft and Submitted
   const stats = useMemo(() => {
     if (submissions.length === 0) {
       return {
         totalSubmissions: 0,
         draftsCount: 0,
         submittedCount: 0,
-        approvedCount: 0,
-        pendingReviewCount: 0,
-        needsRevisionCount: 0,
         totalFileFolders: 0,
         totalRegisters: 0,
-        completionRate: 0,
       };
     }
 
     const draftCount = submissions.filter((s) => s.status === 'draft').length;
     const submittedCount = submissions.filter((s) => s.status === 'submitted').length;
-    const approvedCount = submissions.filter((s) => s.reviewStatus === 'approved').length;
-    const pendingReviewCount = submissions.filter(
-      (s) => s.status === 'submitted' && (!s.reviewStatus || s.reviewStatus === 'pending')
-    ).length;
-    const needsRevisionCount = submissions.filter((s) => s.reviewStatus === 'needs_revision').length;
 
     const totalFileFolders = submissions.reduce((sum, s) => sum + s.fileFoldersTotal, 0);
     const totalRegisters = submissions.reduce((sum, s) => sum + s.registersTotal, 0);
-
-    const completionRate = submittedCount > 0
-      ? Math.round((approvedCount / submittedCount) * 100)
-      : 0;
 
     return {
       totalSubmissions: submissions.length,
       draftsCount: draftCount,
       submittedCount: submittedCount,
-      approvedCount: approvedCount,
-      pendingReviewCount: pendingReviewCount,
-      needsRevisionCount: needsRevisionCount,
       totalFileFolders,
       totalRegisters,
-      completionRate,
     };
   }, [submissions]);
 
@@ -65,6 +48,13 @@ const DrDashboard: React.FC = () => {
       dispatch(getMySubmissions({ page: 1, limit: 100 }));
     }
   }, [dispatch, accessToken, isInitializing]);
+
+  // Clear error on unmount
+  useEffect(() => {
+    return () => {
+      dispatch(clearError());
+    };
+  }, [dispatch]);
 
   const formatDate = (dateString?: string): string => {
     if (!dateString) return '—';
@@ -81,23 +71,15 @@ const DrDashboard: React.FC = () => {
     }
   };
 
-  const getStatusBadge = (status: string, reviewStatus?: string): React.ReactNode => {
+  // Simplified status badge - only Draft and Submitted
+  const getStatusBadge = (status: string): React.ReactNode => {
     if (status === 'draft') {
       return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">Draft</span>;
     }
     if (status === 'submitted') {
-      if (reviewStatus === 'approved') {
-        return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Approved</span>;
-      }
-      if (reviewStatus === 'needs_revision') {
-        return <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-semibold">Needs Revision</span>;
-      }
-      if (reviewStatus === 'pending' || !reviewStatus) {
-        return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold">Pending Review</span>;
-      }
-      return <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-semibold">Submitted</span>;
+      return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Submitted</span>;
     }
-    return null;
+    return <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs font-semibold">Unknown</span>;
   };
 
   if (isInitializing) {
@@ -141,7 +123,7 @@ const DrDashboard: React.FC = () => {
               Welcome, {user?.fullName || 'Deputy Registrar'}
             </h1>
             <p className="text-sm sm:text-base text-[#cdd6e0] max-w-2xl">
-              Overview of your station requirement submissions. Track your drafts, submissions, and review status.
+              Overview of your station requirement submissions. Track your drafts and submitted forms.
             </p>
           </div>
         </div>
@@ -199,7 +181,7 @@ const DrDashboard: React.FC = () => {
                 📋
               </div>
             </div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span className="text-xs text-slate-500">Status:</span>
               {stats.draftsCount > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
@@ -265,7 +247,7 @@ const DrDashboard: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {getStatusBadge(submission.status, submission.reviewStatus)}
+                        {getStatusBadge(submission.status)}
                       </td>
                       <td className="px-6 py-4 text-slate-500 whitespace-nowrap text-xs">
                         {formatDate(submission.submittedAt || submission.updatedAt)}

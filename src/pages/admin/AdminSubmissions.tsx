@@ -26,15 +26,11 @@ type FetchSubmissionsParams = {
   adminView?: boolean;
 };
 
-// Status filter options - match backend StationStatus type
+// Status filter options - only Submitted and Not Submitted for reports
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '', label: 'All Statuses' },
-  { value: 'not_started', label: 'Not Started' },
-  { value: 'in_progress', label: 'In Progress' },
   { value: 'submitted', label: 'Submitted' },
-  { value: 'pending_review', label: 'Pending Review' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'needs_revision', label: 'Needs Revision' },
+  { value: 'not_submitted', label: 'Not Submitted' },
 ];
 
 const AdminSubmissions: React.FC = () => {
@@ -504,7 +500,7 @@ const AdminSubmissions: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Status Filter - Using correct status values */}
+                      {/* Status Filter - Only Submitted and Not Submitted */}
                       <div>
                         <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
                         <select

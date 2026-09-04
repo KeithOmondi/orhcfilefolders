@@ -12,7 +12,7 @@ import {
 } from '../../store/slices/stationRequirementsSlice';
 import type { AppDispatch, RootState } from '../../store/store';
 
-// Shape of an entry in report.stations — used by both the main table and the modal
+// Shape of an entry in report.stations
 interface StationStatus {
   station: string;
   submitterName?: string;
@@ -22,6 +22,7 @@ interface StationStatus {
     registersComplete?: boolean;
   };
   lastUpdatedAt?: string;
+  hasSubmitted?: boolean; // Add this to track if station has submitted
 }
 
 const AdminDashboard: React.FC = () => {
@@ -40,7 +41,6 @@ const AdminDashboard: React.FC = () => {
   const [modalTitle, setModalTitle] = useState('');
   const [modalStations, setModalStations] = useState<StationStatus[]>([]);
 
-  // Fetch dashboard data - using a ref to prevent multiple calls
   useEffect(() => {
     if (hasFetched.current || isInitializing || !accessToken) {
       return;
@@ -48,12 +48,10 @@ const AdminDashboard: React.FC = () => {
 
     hasFetched.current = true;
 
-    // Fetch totals and dashboard stats
     dispatch(getSubmissionTotals());
     dispatch(getAdminDashboard());
     dispatch(getStationReport({}));
 
-    // Fetch recent submissions
     dispatch(getSubmissions({
       page: 1,
       limit: 5,
@@ -71,14 +69,12 @@ const AdminDashboard: React.FC = () => {
       });
   }, [dispatch, accessToken, isInitializing]);
 
-  // Clear error when component unmounts
   useEffect(() => {
     return () => {
       dispatch(clearError());
     };
   }, [dispatch]);
 
-  // Format date for display
   const formatDate = (dateString?: string): string => {
     if (!dateString) return 'N/A';
     try {
@@ -94,73 +90,35 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Get status badge color for submission status
+  // Simplified status colors - only Submitted and Not Submitted
   const getStatusColor = (status?: string): string => {
-    switch (status) {
-      case 'submitted':
-        return 'bg-blue-100 text-blue-800';
-      case 'approved':
-        return 'bg-green-100 text-green-800';
-      case 'needs_revision':
-        return 'bg-red-100 text-red-800';
-      case 'draft':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'not_started':
-        return 'bg-gray-100 text-gray-800';
-      case 'in_progress':
-        return 'bg-amber-100 text-amber-800';
-      case 'pending_review':
-        return 'bg-purple-100 text-purple-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+    if (status === 'submitted' || status === 'approved') {
+      return 'bg-green-100 text-green-800';
     }
+    return 'bg-gray-100 text-gray-800';
   };
 
-  // Get status display text
   const getStatusText = (status?: string): string => {
-    switch (status) {
-      case 'submitted':
-        return 'Submitted';
-      case 'approved':
-        return 'Approved';
-      case 'needs_revision':
-        return 'Needs Revision';
-      case 'draft':
-        return 'Draft';
-      case 'not_started':
-        return 'Not Started';
-      case 'in_progress':
-        return 'In Progress';
-      case 'pending_review':
-        return 'Pending Review';
-      default:
-        return 'Unknown';
+    if (status === 'submitted' || status === 'approved') {
+      return 'Submitted';
     }
+    return 'Not Submitted';
   };
 
-  // Handle card click to open modal
   const handleCardClick = (statusType: string, title: string) => {
     if (!report?.stations) return;
 
     let filteredStations: StationStatus[];
 
-    switch (statusType) {
-      case 'not_started':
-        filteredStations = report.stations.filter(s => s.status === 'not_started');
-        break;
-      case 'in_progress':
-        filteredStations = report.stations.filter(s => s.status === 'in_progress');
-        break;
-      case 'submitted':
-        filteredStations = report.stations.filter(
-          s => s.status === 'submitted' ||
-               s.status === 'pending_review' ||
-               s.status === 'approved' ||
-               s.status === 'needs_revision'
-        );
-        break;
-      default:
-        filteredStations = [];
+    if (statusType === 'submitted') {
+      filteredStations = report.stations.filter(
+        s => s.status === 'submitted' || s.status === 'approved'
+      );
+    } else {
+      // Not Submitted includes: not_started, in_progress, pending_review, needs_revision, draft
+      filteredStations = report.stations.filter(
+        s => s.status !== 'submitted' && s.status !== 'approved'
+      );
     }
 
     setModalTitle(title);
@@ -168,13 +126,11 @@ const AdminDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // Close modal
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setModalStations([]);
   };
 
-  // Loading state
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-[#f7f5f0] flex items-center justify-center">
@@ -186,7 +142,6 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
-  // Not authenticated
   if (!accessToken) {
     return (
       <div className="min-h-screen bg-[#f7f5f0] flex items-center justify-center">
@@ -201,15 +156,30 @@ const AdminDashboard: React.FC = () => {
   const totalSubmissions = totals?.totalSubmissions || 0;
   const totalFileFolders = totals?.totalFileFolders || 0;
   const totalRegisters = totals?.totalRegisters || 0;
-  const pendingReviews = dashboardStats?.pendingReviews || 0;
   const draftsCount = totals?.draftsCount || 0;
   const submittedCount = totals?.submittedCount || 0;
   const submissionsToday = dashboardStats?.submissionsToday || 0;
 
-  // Station status breakdown from report
-  const stationsByStatus = report?.stationsByStatus || {};
+  // Calculate station status from report
   const totalStations = report?.totalStations || 0;
-  const notStartedCount = stationsByStatus['not_started'] || 0;
+  const stationList = report?.stations || [];
+  
+  // Count stations that have submitted (status === 'submitted' or 'approved')
+  const submittedStations = stationList.filter(
+    s => s.status === 'submitted' || s.status === 'approved'
+  ).length;
+  
+  // Not submitted = total stations - submitted stations
+  const notSubmittedStations = totalStations - submittedStations;
+
+  // Debug logging to verify counts
+  console.log('📊 Dashboard stats:', {
+    totalStations,
+    submittedStations,
+    notSubmittedStations,
+    stationListLength: stationList.length,
+    stationStatuses: stationList.map(s => ({ station: s.station, status: s.status })),
+  });
 
   return (
     <div className="min-h-screen bg-[#f7f5f0] py-8">
@@ -239,39 +209,49 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md mb-6">
             ✗ {error}
           </div>
         )}
 
-        {/* Station Status Cards - Only 2 Cards: Total Stations and Not Started */}
+        {/* Station Status Cards - Submitted vs Not Submitted */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {/* Card 1: Total Stations */}
-          <div className="bg-gradient-to-br from-[#12253d] to-[#1e3a5f] text-white rounded-lg p-5 shadow-sm">
+          {/* Card 1: Submitted - Clickable */}
+          <div
+            onClick={() => handleCardClick('submitted', 'Submitted Stations')}
+            className="bg-gradient-to-br from-[#12253d] to-[#1e3a5f] text-white rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-[#c9b98a]">Total Stations</p>
-                <p className="text-3xl font-bold mt-1">{totalStations}</p>
+                <p className="text-xs uppercase tracking-wider text-[#c9b98a]">Submitted</p>
+                <p className="text-3xl font-bold mt-1">{submittedStations}</p>
               </div>
               <div className="bg-white/10 p-2.5 rounded-full">
-                <svg className="w-6 h-6 text-[#c9b98a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
             </div>
+            <div className="mt-2 text-xs text-[#c9b98a]">
+              {totalStations > 0 ? Math.round((submittedStations / totalStations) * 100) : 0}% of total
+            </div>
+            {submittedStations > 0 && (
+              <div className="mt-2 text-xs text-emerald-300 hover:underline">
+                Click to view details →
+              </div>
+            )}
           </div>
 
-          {/* Card 2: Not Started - Clickable */}
+          {/* Card 2: Not Submitted - Clickable */}
           <div
-            onClick={() => handleCardClick('not_started', 'Not Started Stations')}
+            onClick={() => handleCardClick('not_submitted', 'Not Submitted Stations')}
             className="bg-white border border-gray-300 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:border-gray-400"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Not Started</p>
-                <p className="text-3xl font-bold text-gray-400 mt-1">{notStartedCount}</p>
+                <p className="text-xs uppercase tracking-wider text-gray-500">Not Submitted</p>
+                <p className="text-3xl font-bold text-gray-400 mt-1">{notSubmittedStations}</p>
               </div>
               <div className="bg-gray-100 p-2.5 rounded-full">
                 <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,9 +260,9 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              {totalStations > 0 ? Math.round((notStartedCount / totalStations) * 100) : 0}% of total
+              {totalStations > 0 ? Math.round((notSubmittedStations / totalStations) * 100) : 0}% of total
             </div>
-            {notStartedCount > 0 && (
+            {notSubmittedStations > 0 && (
               <div className="mt-2 text-xs text-blue-600 hover:underline">
                 Click to view details →
               </div>
@@ -290,9 +270,8 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Submission Stats Cards - 4 Cards (omitted: In Progress, Submitted, Pending Reviews, Needs Revision) */}
+        {/* Submission Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Card 1: Total Submissions */}
           <div className="bg-white border border-gray-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -312,7 +291,6 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: File Folders */}
           <div className="bg-white border border-gray-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -329,7 +307,6 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 3: Registers */}
           <div className="bg-white border border-gray-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -346,7 +323,6 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 4: Today's Submissions */}
           <div className="bg-white border border-gray-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -434,20 +410,6 @@ const AdminDashboard: React.FC = () => {
                 className="w-full flex items-center justify-between px-4 py-3 bg-[#f7f5f0] rounded-lg hover:bg-gray-200 transition-colors"
               >
                 <span className="text-sm font-medium text-gray-700">View All Submissions</span>
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-              <button
-                onClick={() => window.location.href = '/admin/review-queue'}
-                className="w-full flex items-center justify-between px-4 py-3 bg-[#f7f5f0] rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                <span className="text-sm font-medium text-gray-700">Review Queue</span>
-                {pendingReviews > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    {pendingReviews}
-                  </span>
-                )}
                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
@@ -550,16 +512,14 @@ const AdminDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Footer */}
         <p className="text-xs text-gray-500 mt-6 text-center">
           © {new Date().getFullYear()} Judiciary Data Collection System · Ref RHC/DSCM/112
         </p>
       </div>
 
-      {/* Modal - Only for Not Started */}
+      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Backdrop */}
           <div
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={handleCloseModal}
@@ -568,12 +528,9 @@ const AdminDashboard: React.FC = () => {
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
 
-              {/* Modal Header */}
               <div className="bg-gradient-to-r from-[#12253d] to-[#1e3a5f] text-[#f3efe4] p-6 border-b-4 border-[#a3782e] flex justify-between items-start">
                 <div>
-                  <h2 className="text-xl font-bold text-white">
-                    {modalTitle}
-                  </h2>
+                  <h2 className="text-xl font-bold text-white">{modalTitle}</h2>
                   <p className="text-xs text-[#cdd6e0] mt-1 font-medium">
                     {modalStations.length} station{modalStations.length !== 1 ? 's' : ''} found
                   </p>
@@ -588,7 +545,6 @@ const AdminDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Modal Body */}
               <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
                 {modalStations.length === 0 ? (
                   <div className="text-center py-12">
@@ -629,7 +585,6 @@ const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* Modal Footer */}
               <div className="bg-white px-6 py-3.5 border-t border-slate-200 flex justify-between items-center">
                 <span className="text-xs text-slate-500">
                   Total: {modalStations.length} station{modalStations.length !== 1 ? 's' : ''}

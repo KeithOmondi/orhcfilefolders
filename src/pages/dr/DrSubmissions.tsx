@@ -75,7 +75,6 @@ const DrSubmissions: React.FC = () => {
       console.error('No submission ID found for editing');
       return;
     }
-    // Navigate to the edit form with the draft ID
     navigate(`/dr/requirements/edit/${submission.id}`);
   };
 
@@ -155,27 +154,16 @@ const DrSubmissions: React.FC = () => {
     }
   };
 
-  // Get status badge
-  const getStatusBadge = (status: string, reviewStatus?: string): React.ReactNode => {
+  // Get status badge - Simplified for DR view
+  const getStatusBadge = (status: string): React.ReactNode => {
     if (status === 'draft') {
       return <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">Draft</span>;
     }
     if (status === 'submitted') {
-      if (reviewStatus === 'approved') {
-        return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Approved</span>;
-      }
-      if (reviewStatus === 'needs_revision') {
-        return <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-semibold">Needs Revision</span>;
-      }
-      if (reviewStatus === 'pending' || !reviewStatus) {
-        return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold">Pending Review</span>;
-      }
-      return <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-semibold">Submitted</span>;
+      return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Submitted</span>;
     }
-    return null;
+    return <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs font-semibold">Unknown</span>;
   };
-
- 
 
   if (isInitializing) {
     return (
@@ -367,7 +355,7 @@ const DrSubmissions: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            {getStatusBadge(submission.status, submission.reviewStatus)}
+                            {getStatusBadge(submission.status)}
                           </td>
                           <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                             {formatDate(submission.submittedAt || submission.updatedAt)}
@@ -471,7 +459,6 @@ const DrSubmissions: React.FC = () => {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Backdrop */}
           <div
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={handleCloseModal}
@@ -527,7 +514,7 @@ const DrSubmissions: React.FC = () => {
                       </div>
                       <div className="bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</p>
-                        <p className="mt-0.5">{getStatusBadge(currentSubmission.status, currentSubmission.reviewStatus)}</p>
+                        <p className="mt-0.5">{getStatusBadge(currentSubmission.status)}</p>
                       </div>
                       <div className="bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted Date</p>
