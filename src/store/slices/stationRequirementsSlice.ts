@@ -34,6 +34,8 @@ export const CASE_CATEGORIES: Record<string, string[]> = {
     "Commercial Appeal",
     "Commercial Petitions",
     "Arbitration",
+    "Custom Tax Appeals",        // ✅ Added
+    "Tribunal Appeals",          // ✅ Added
   ],
   Admiralty: ["Admiralty"],
   Civil: [
@@ -90,6 +92,8 @@ export const CASE_REGISTERS: Record<string, string[]> = {
     "Insolvency Petition Case Register",
     "Arbitration Case Register",
     "Admiralty Case Register",
+    "Custom Tax Appeals Register",   // ✅ Added
+    "Tribunal Appeals Register",     // ✅ Added
   ],
   "Constitutional & Human Rights": [
     "Constitutional & Human Rights Petition Case Register",
@@ -146,6 +150,8 @@ export const CASE_CODES: Record<string, string> = {
   "Commercial & Tax_Commercial Appeal": "HCCCOMMA",
   "Commercial & Tax_Commercial Petitions": "HCCOMMPET",
   "Commercial & Tax_Arbitration": "HCCOMMARB",
+  "Commercial & Tax_Custom Tax Appeals": "HCCOMMCTA",     // ✅ Added
+  "Commercial & Tax_Tribunal Appeals": "HCCOMMTA",        // ✅ Added
   Admiralty_Admiralty: "HCCOMMADMIR",
   "Civil_High Court Civil": "HCCC",
   "Civil_High Court Civil Miscellaneous": "HCCC Misc.",
@@ -189,6 +195,8 @@ export const CASE_COLORS: Record<string, string> = {
   "Commercial & Tax_Commercial Appeal": "Light Purple",
   "Commercial & Tax_Commercial Petitions": "Light Purple",
   "Commercial & Tax_Arbitration": "Light Purple",
+  "Commercial & Tax_Custom Tax Appeals": "Light Purple",     // ✅ Added
+  "Commercial & Tax_Tribunal Appeals": "Light Purple",       // ✅ Added
   Admiralty_Admiralty: "Sky Blue",
   "Civil_High Court Civil": "Orange",
   "Civil_High Court Civil Miscellaneous": "Orange",
