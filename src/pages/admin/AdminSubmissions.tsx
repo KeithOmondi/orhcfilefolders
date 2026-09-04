@@ -61,10 +61,8 @@ const AdminSubmissions: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // Report download state
+  // Report download state - removed date filters
   const [reportFormat, setReportFormat] = useState<ReportFormat>('pdf');
-  const [reportDateFrom, setReportDateFrom] = useState<string>('');
-  const [reportDateTo, setReportDateTo] = useState<string>('');
   const [reportStatus, setReportStatus] = useState<string>('');
   const [showReportOptions, setShowReportOptions] = useState<boolean>(false);
 
@@ -201,13 +199,11 @@ const AdminSubmissions: React.FC = () => {
   // --- Report Download Handlers ---
   const handleDownloadReport = async (): Promise<void> => {
     try {
-      // Build params - only include non-empty values
+      // Build params - only format and status (no date filters)
       const params: DownloadReportParams = {
         format: reportFormat,
       };
       
-      if (reportDateFrom) params.fromDate = reportDateFrom;
-      if (reportDateTo) params.toDate = reportDateTo;
       if (reportStatus) params.status = reportStatus;
 
       console.log('📤 Downloading report with params:', params);
@@ -234,14 +230,6 @@ const AdminSubmissions: React.FC = () => {
 
   const toggleReportOptions = (): void => {
     setShowReportOptions(!showReportOptions);
-    if (!showReportOptions) {
-      // Set default dates for last 30 days
-      const today = new Date();
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(today.getDate() - 30);
-      setReportDateTo(today.toISOString().split('T')[0]);
-      setReportDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
-    }
   };
 
   const formatDate = (dateString?: string): string => {
@@ -435,9 +423,9 @@ const AdminSubmissions: React.FC = () => {
                   )}
                 </button>
 
-                {/* Report Options Dropdown */}
+                {/* Report Options Dropdown - No date filters */}
                 {showReportOptions && !isDownloading && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-4 z-20">
+                  <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-4 z-20">
                     <div className="flex justify-between items-center mb-3">
                       <h4 className="text-sm font-bold text-slate-800">Report Options</h4>
                       <button
@@ -475,28 +463,6 @@ const AdminSubmissions: React.FC = () => {
                           >
                             Word (DOCX)
                           </button>
-                        </div>
-                      </div>
-
-                      {/* Date Range */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-500 mb-1">From Date</label>
-                          <input
-                            type="date"
-                            value={reportDateFrom}
-                            onChange={(e) => setReportDateFrom(e.target.value)}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-500 mb-1">To Date</label>
-                          <input
-                            type="date"
-                            value={reportDateTo}
-                            onChange={(e) => setReportDateTo(e.target.value)}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
-                          />
                         </div>
                       </div>
 

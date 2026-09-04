@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   getUsers,
@@ -13,6 +13,7 @@ import {
   type UpdateUserInput,
 } from '../../store/slices/userSlice';
 import type { AppDispatch, RootState } from '../../store/store';
+import debounce from 'lodash/debounce';
 
 // Modal types
 type ModalMode = 'create' | 'edit' | 'view' | null;
@@ -60,8 +61,8 @@ const AdminUsers: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Fetch users on mount and when filters change
-  useEffect(() => {
+  // Function to fetch users with current filters
+  const fetchUsers = useCallback(() => {
     if (!isInitializing && accessToken) {
       const queryParams: {
         page?: number;
@@ -73,14 +74,25 @@ const AdminUsers: React.FC = () => {
         page: filters.page,
         limit: filters.limit,
       };
-      if (filters.search) queryParams.search = filters.search;
+      
+      // Only add search if it has a value
+      if (filters.search && filters.search.trim() !== '') {
+        queryParams.search = filters.search.trim();
+      }
+      
       if (filters.role) queryParams.role = filters.role;
       if (filters.isActive !== undefined) queryParams.isActive = filters.isActive;
 
+      console.log('Fetching users with params:', queryParams); // Debug log
       dispatch(getUsers(queryParams));
       dispatch(getUserStats());
     }
   }, [dispatch, accessToken, isInitializing, filters]);
+
+  // Fetch users when filters change
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   // Clear error on unmount
   useEffect(() => {
@@ -89,12 +101,45 @@ const AdminUsers: React.FC = () => {
     };
   }, [dispatch]);
 
-  // Handle search
+  // Debounced search handler
+// Instead of wrapping debounce with useCallback, use useMemo
+const debouncedSearch = useMemo(
+  () => debounce((searchValue: string) => {
+    setFilters(prev => ({
+      ...prev,
+      search: searchValue.trim(),
+      page: 1,
+    }));
+  }, 500),
+  []
+);
+
+// And when you need to cancel it:
+// debouncedSearch.cancel()
+
+  // Handle search input change with debounce
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    debouncedSearch(value);
+  };
+
+  // Handle immediate search (on button click or Enter key)
   const handleSearch = () => {
-    setFilters({ ...filters, search: searchTerm, page: 1 });
+    // Cancel any pending debounced search
+    debouncedSearch.cancel();
+    
+    setFilters(prev => ({
+      ...prev,
+      search: searchTerm.trim(),
+      page: 1,
+    }));
   };
 
   const handleClearFilters = () => {
+    // Cancel any pending debounced search
+    debouncedSearch.cancel();
+    
     setSearchTerm('');
     setSelectedRole('');
     setSelectedStatus('');
@@ -108,39 +153,39 @@ const AdminUsers: React.FC = () => {
   // Handle page change
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
-      setFilters({ ...filters, page: newPage });
+      setFilters(prev => ({ ...prev, page: newPage }));
     }
   };
 
   // Handle limit change
   const handleLimitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setFilters({
-      ...filters,
+    setFilters(prev => ({
+      ...prev,
       limit: Number(e.target.value),
       page: 1,
-    });
+    }));
   };
 
   // Handle status filter change
   const handleStatusFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     setSelectedStatus(value);
-    setFilters({
-      ...filters,
+    setFilters(prev => ({
+      ...prev,
       isActive: value === '' ? undefined : value === 'active',
       page: 1,
-    });
+    }));
   };
 
   // Handle role filter change
   const handleRoleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     setSelectedRole(value);
-    setFilters({
-      ...filters,
+    setFilters(prev => ({
+      ...prev,
       role: value === '' ? undefined : (value as 'admin' | 'dr'),
       page: 1,
-    });
+    }));
   };
 
   // Open modal for create
@@ -195,7 +240,7 @@ const AdminUsers: React.FC = () => {
   // Handle form input change
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
     setFormError(null);
   };
 
@@ -208,14 +253,8 @@ const AdminUsers: React.FC = () => {
     try {
       if (modalMode === 'create') {
         await dispatch(createUser(formData)).unwrap();
-        // Refresh user list
-        dispatch(getUsers({
-          page: filters.page,
-          limit: filters.limit,
-          search: filters.search,
-          role: filters.role,
-          isActive: filters.isActive,
-        }));
+        // Refresh user list with current filters
+        fetchUsers();
         handleCloseModal();
       } else if (modalMode === 'edit' && selectedUser) {
         const updateData: UpdateUserInput = {
@@ -227,14 +266,8 @@ const AdminUsers: React.FC = () => {
           role: formData.role,
         };
         await dispatch(updateUser({ id: selectedUser.id, data: updateData })).unwrap();
-        // Refresh user list
-        dispatch(getUsers({
-          page: filters.page,
-          limit: filters.limit,
-          search: filters.search,
-          role: filters.role,
-          isActive: filters.isActive,
-        }));
+        // Refresh user list with current filters
+        fetchUsers();
         handleCloseModal();
       }
     } catch (err: unknown) {
@@ -250,14 +283,7 @@ const AdminUsers: React.FC = () => {
     if (window.confirm(`Are you sure you want to ${isActive ? 'activate' : 'deactivate'} this user?`)) {
       try {
         await dispatch(toggleUserStatus({ id, isActive })).unwrap();
-        dispatch(getUsers({
-          page: filters.page,
-          limit: filters.limit,
-          search: filters.search,
-          role: filters.role,
-          isActive: filters.isActive,
-        }));
-        dispatch(getUserStats());
+        fetchUsers();
       } catch (err) {
         console.error('Failed to toggle user status:', err);
       }
@@ -269,14 +295,7 @@ const AdminUsers: React.FC = () => {
     if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       try {
         await dispatch(deleteUser(id)).unwrap();
-        dispatch(getUsers({
-          page: filters.page,
-          limit: filters.limit,
-          search: filters.search,
-          role: filters.role,
-          isActive: filters.isActive,
-        }));
-        dispatch(getUserStats());
+        fetchUsers();
       } catch (err) {
         console.error('Failed to delete user:', err);
       }
@@ -386,14 +405,14 @@ const AdminUsers: React.FC = () => {
                 <input
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={handleSearchChange}
                   placeholder="Name, PJ, or Email..."
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                 />
                 <button
                   onClick={handleSearch}
-                  className="px-4 py-2 bg-[#1e3a5f] text-white rounded-md hover:bg-[#12253d] transition-colors"
+                  className="px-4 py-2 bg-[#1e3a5f] text-white rounded-md hover:bg-[#12253d] transition-colors whitespace-nowrap"
                 >
                   Search
                 </button>
@@ -443,6 +462,11 @@ const AdminUsers: React.FC = () => {
           <div className="text-sm text-gray-600">
             Showing {pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0} -{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} users
+            {filters.search && (
+              <span className="ml-2 text-blue-600">
+                (filtered by: "{filters.search}")
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">Show:</label>
