@@ -153,7 +153,7 @@ export const CASE_CODES: Record<string, string> = {
   "Commercial & Tax_Commercial Petitions": "HCCOMMPET",
   "Commercial & Tax_Arbitration": "HCCOMMARB",
   "Commercial & Tax_Custom Tax Appeals": "HCCOMMCTA",
-  "Commercial & Tax_Tribunal Appeals": "HCCOMMTA",
+  "Commercial & Tax_Tribunal Appeals": "HCTA",
   "Commercial & Tax_Tribunal Appeal Miscellaneous": "HCTAMISC",  // ✅ Added
   Admiralty_Admiralty: "HCCOMMADMIR",
   "Civil_High Court Civil": "HCCC",
