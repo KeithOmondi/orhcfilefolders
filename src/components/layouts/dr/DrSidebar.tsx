@@ -1,9 +1,9 @@
 // DrSidebar.tsx
 
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { useAppDispatch } from '../../../store/hooks';
-import { logout } from '../../../store/slices/authSlice';
+import React from "react";
+import { NavLink } from "react-router-dom";
+import { useAppDispatch } from "../../../store/hooks";
+import { logout } from "../../../store/slices/authSlice";
 
 interface DrSidebarProps {
   isOpen: boolean;
@@ -21,10 +21,15 @@ export const DrSidebar: React.FC<DrSidebarProps> = ({ isOpen, onClose }) => {
 
   const navItems: NavItem[] = [
     {
-      label: 'Dashboard',
-      path: '/dashboard',
+      label: "Dashboard",
+      path: "/dashboard",
       icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -35,11 +40,16 @@ export const DrSidebar: React.FC<DrSidebarProps> = ({ isOpen, onClose }) => {
       ),
     },
 
-        {
-      label: 'Reuirements Form',
-      path: '/requirements-form',
+    {
+      label: "Reuirements Form",
+      path: "/requirements-form",
       icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -49,8 +59,6 @@ export const DrSidebar: React.FC<DrSidebarProps> = ({ isOpen, onClose }) => {
         </svg>
       ),
     },
-
-
 
 
   ];
@@ -68,7 +76,7 @@ export const DrSidebar: React.FC<DrSidebarProps> = ({ isOpen, onClose }) => {
       {/* Sidebar Container */}
       <aside
         className={`fixed top-0 left-0 z-40 h-screen w-64 bg-slate-900 text-slate-300 flex flex-col justify-between transition-transform duration-300 ease-in-out md:translate-x-0 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Top Section */}
@@ -88,8 +96,18 @@ export const DrSidebar: React.FC<DrSidebarProps> = ({ isOpen, onClose }) => {
               className="md:hidden text-slate-400 hover:text-white focus:outline-none"
               aria-label="Close sidebar"
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -107,8 +125,8 @@ export const DrSidebar: React.FC<DrSidebarProps> = ({ isOpen, onClose }) => {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-emerald-600 text-white font-semibold'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      ? "bg-emerald-600 text-white font-semibold"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                   }`
                 }
               >
@@ -125,7 +143,12 @@ export const DrSidebar: React.FC<DrSidebarProps> = ({ isOpen, onClose }) => {
             onClick={() => dispatch(logout())}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors focus:outline-none"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"

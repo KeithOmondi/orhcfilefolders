@@ -185,7 +185,7 @@ export const CASE_COLORS: Record<string, string> = {
   Criminal_Revisions: "Sky Blue",
   "Criminal_2nd Appeals": "Dark Pink",
   "Anti-Corruption & Economic Crimes_Appeals": "Blue",
-  "Anti-Corruption & Economic Crimes_Judicial Review": "Lime Green",  // ✅ Fixed: changed from Dark Green to Lime Green
+"Anti-Corruption & Economic Crimes_Judicial Review": "Dark Green",   // ✅ Fixed: changed from Dark Green to Lime Green
   "Anti-Corruption & Economic Crimes_Suit": "Maroon",
   "Anti-Corruption & Economic Crimes_Revision": "Neon Green",
   "Anti-Corruption & Economic Crimes_Miscellaneous": "Orange",
