@@ -55,7 +55,7 @@ export const App: React.FC = () => {
         <Route element={<ProtectedRoutes allowedRoles={['dr']} />}>
           <Route element={<DrLayout />}>
             <Route path="/dashboard" element={<DrDashboard />} />
-            <Route path="/equirements-form" element={<DrRequirementsForm />} />
+            <Route path="/requirements-form" element={<DrRequirementsForm />} />
             <Route path="/pending-proceedings" element={<DrForm />} />
           </Route>
         </Route>
