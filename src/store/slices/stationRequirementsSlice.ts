@@ -36,7 +36,7 @@ export const CASE_CATEGORIES: Record<string, string[]> = {
     "Arbitration",
     "Custom Tax Appeals",
     "Tribunal Appeals",
-    "Tribunal Appeal Miscellaneous",  // ✅ Added
+    "Tribunal Appeal Miscellaneous",
   ],
   Admiralty: ["Admiralty"],
   Civil: [
@@ -77,6 +77,7 @@ export const CASE_REGISTERS: Record<string, string[]> = {
     "Anti-Corruption and Economic Crimes Appeals Case Register",
     "Anti-Corruption and Economic Crimes Revision Case Register",
     "Anti-Corruption and Economic Crimes Miscellaneous Case Register",
+    "ACEC Judicial Review Register",  // ✅ Added
   ],
   Civil: [
     "Civil Case Register",
@@ -95,7 +96,7 @@ export const CASE_REGISTERS: Record<string, string[]> = {
     "Admiralty Case Register",
     "Custom Tax Appeals Register",
     "Tribunal Appeals Register",
-    "Tribunal Appeal Miscellaneous Register",  // ✅ Added
+    "Tribunal Appeal Miscellaneous Register",
   ],
   "Constitutional & Human Rights": [
     "Constitutional & Human Rights Petition Case Register",
@@ -154,7 +155,7 @@ export const CASE_CODES: Record<string, string> = {
   "Commercial & Tax_Arbitration": "HCCOMMARB",
   "Commercial & Tax_Custom Tax Appeals": "HCCOMMCTA",
   "Commercial & Tax_Tribunal Appeals": "HCTA",
-  "Commercial & Tax_Tribunal Appeal Miscellaneous": "HCTAMISC",  // ✅ Added
+  "Commercial & Tax_Tribunal Appeal Miscellaneous": "HCTAMISC",
   Admiralty_Admiralty: "HCCOMMADMIR",
   "Civil_High Court Civil": "HCCC",
   "Civil_High Court Civil Miscellaneous": "HCCC Misc.",
@@ -184,7 +185,7 @@ export const CASE_COLORS: Record<string, string> = {
   Criminal_Revisions: "Sky Blue",
   "Criminal_2nd Appeals": "Dark Pink",
   "Anti-Corruption & Economic Crimes_Appeals": "Blue",
-  "Anti-Corruption & Economic Crimes_Judicial Review": "Dark Green",
+  "Anti-Corruption & Economic Crimes_Judicial Review": "Lime Green",  // ✅ Fixed: changed from Dark Green to Lime Green
   "Anti-Corruption & Economic Crimes_Suit": "Maroon",
   "Anti-Corruption & Economic Crimes_Revision": "Neon Green",
   "Anti-Corruption & Economic Crimes_Miscellaneous": "Orange",
@@ -200,7 +201,7 @@ export const CASE_COLORS: Record<string, string> = {
   "Commercial & Tax_Arbitration": "Light Purple",
   "Commercial & Tax_Custom Tax Appeals": "Light Purple",
   "Commercial & Tax_Tribunal Appeals": "Light Purple",
-  "Commercial & Tax_Tribunal Appeal Miscellaneous": "Light Purple",  // ✅ Added
+  "Commercial & Tax_Tribunal Appeal Miscellaneous": "Light Purple",
   Admiralty_Admiralty: "Sky Blue",
   "Civil_High Court Civil": "Orange",
   "Civil_High Court Civil Miscellaneous": "Orange",

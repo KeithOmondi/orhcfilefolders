@@ -1,22 +1,28 @@
+// App.tsx
+
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from './store/hooks';
 import { checkAuth } from './store/slices/authSlice';
 
 // Auth Components & Guards
 import Login from './components/auth/Login';
-
-// Placeholder/Actual Page Components
-import DrDashboard from './pages/dr/DrDashboard';
-import AdminDashboard from './pages/admin/AdminDashboard';
 import ProtectedRoutes from './routes/ProtectedRoutes';
+
+// Layouts
 import DrLayout from './components/layouts/dr/DrLayout';
 import AdminLayout from './components/layouts/admin/AdminLayout';
-import DrRequirementsForm from './pages/dr/DrRequirementsForm';
-import AdminSubmissions from './pages/admin/AdminSubmissions';
+
+// DR Pages
+import DrDashboard from './pages/dr/DrDashboard';
+import DrForm from './pages/dr/DrForm';
+
+// Admin Pages
+import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
-import DrSubmissions from './pages/dr/DrSubmissions';
-import AdminFormBuilder from './pages/admin/AdminFormBuilder';
+import AdminPendingP from './pages/admin/AdminPndingP';
+import AdminSubmissions from './pages/admin/AdminSubmissions';
+import DrRequirementsForm from './pages/dr/DrRequirementsForm';
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -42,16 +48,15 @@ export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Login Route */}
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
 
         {/* Protected DR Routes */}
         <Route element={<ProtectedRoutes allowedRoles={['dr']} />}>
           <Route element={<DrLayout />}>
             <Route path="/dashboard" element={<DrDashboard />} />
-            <Route path="/requirements-form" element={<DrRequirementsForm />} />
-            <Route path="/all-submissions" element={<DrSubmissions />} />
-            {/* Add more DR child routes here */}
+            <Route path="/equirements-form" element={<DrRequirementsForm />} />
+            <Route path="/pending-proceedings" element={<DrForm />} />
           </Route>
         </Route>
 
@@ -59,10 +64,9 @@ export const App: React.FC = () => {
         <Route element={<ProtectedRoutes allowedRoles={['admin']} />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/pending-proceedings" element={<AdminPendingP />} />
             <Route path="/admin/submissions" element={<AdminSubmissions />} />
-            <Route path="/admin/form-builder" element={<AdminFormBuilder />} />
             <Route path="/admin/users" element={<AdminUsers />} />
-            {/* Add more Admin child routes here */}
           </Route>
         </Route>
 
@@ -88,12 +92,12 @@ export const App: React.FC = () => {
             <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 text-center">
               <h1 className="text-4xl font-extrabold text-slate-800">404</h1>
               <p className="text-slate-600 mt-2">The page you are looking for does not exist.</p>
-              <a
-                href="/"
+              <Link
+                to="/"
                 className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
               >
                 Return to Home
-              </a>
+              </Link>
             </div>
           }
         />

@@ -1,4 +1,4 @@
-// store/slices/formBuilderSlice.ts
+// store/slices/pendingProceedingsSlice.ts
 
 import {
   createSlice,
@@ -9,363 +9,72 @@ import axios from "axios";
 import axiosClient from "../../api/api";
 
 // ============================================================
-// TYPES - Google Forms Style
+// TYPES — Frontend definitions matching backend schemas
 // ============================================================
 
-export type QuestionType =
-  | 'short_answer'
-  | 'paragraph'
-  | 'multiple_choice'
-  | 'checkboxes'
-  | 'dropdown'
-  | 'linear_scale'
-  | 'multiple_choice_grid'
-  | 'checkbox_grid'
-  | 'date'
-  | 'time'
-  | 'datetime'
-  | 'file_upload'
-  | 'section_header'
-  | 'image'
-  | 'video'
-  | 'page_break';
-
-export interface QuestionOption {
-  id: string;
-  label: string;
-  value: string;
-  isCorrect?: boolean;
-  imageUrl?: string;
-  goToSection?: string;
-}
-
-export interface QuestionGridRow {
-  id: string;
-  label: string;
-}
-
-export interface QuestionGridColumn {
-  id: string;
-  label: string;
-}
-
-export interface ConditionalLogic {
-  dependsOnQuestion: string;
-  condition: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
-  value?: string | number | boolean | string[];
-  showIfConditionMet: boolean;
-}
-
-export interface Question {
-  id: string;
-  type: QuestionType;
-  title: string;
-  description?: string;
-  required: boolean;
-  validation?: {
-    minLength?: number;
-    maxLength?: number;
-    min?: number;
-    max?: number;
-    pattern?: string;
-    patternMessage?: string;
-    customError?: string;
-    fileTypes?: string[];
-    maxFileSize?: number;
-    maxFiles?: number;
-  };
-  options?: QuestionOption[];
-  gridRows?: QuestionGridRow[];
-  gridColumns?: QuestionGridColumn[];
-  gridRowSelection?: 'single' | 'multiple';
-  scaleMin?: number;
-  scaleMax?: number;
-  scaleMinLabel?: string;
-  scaleMaxLabel?: string;
-  placeholder?: string;
-  defaultValue?: string | number | boolean | string[];
-  imageUrl?: string;
-  videoUrl?: string;
-  helpText?: string;
-  conditionalLogic?: ConditionalLogic;
-  isQuizQuestion?: boolean;
-  points?: number;
-  shuffleOptions?: boolean;
-  dataValidation?: {
-    type: 'number' | 'text' | 'email' | 'url' | 'regex';
-    min?: number;
-    max?: number;
-    pattern?: string;
-    customMessage?: string;
-  };
-}
-
-export interface FormSection {
-  id: string;
-  title: string;
-  description?: string;
-  questions: Question[];
-  order: number;
-  type: 'section' | 'page';
-  imageUrl?: string;
-  videoUrl?: string;
-  conditionalLogic?: ConditionalLogic;
-}
-
-export interface FormSettings {
-  isPublished: boolean;
-  isPublic: boolean;
-  requireLogin: boolean;
-  collectEmail: boolean;
-  restrictToDomain?: string;
-  allowEditing: boolean;
-  limitResponses: boolean;
-  maxResponses?: number;
-  responseDeadline?: string;
-  showProgressBar: 'top' | 'bottom' | 'none';
-  showQuestionNumbers: boolean;
-  confirmationMessage?: string;
-  redirectUrl?: string;
-  sendEmailConfirmation: boolean;
-  emailConfirmationSubject?: string;
-  emailConfirmationBody?: string;
-  notificationEmails?: string[];
-  isQuiz: boolean;
-  showScoreImmediately?: boolean;
-  showCorrectAnswers?: boolean;
-  captcha: boolean;
-  passwordProtection?: string;
-  theme?: {
-    headerColor?: string;
-    backgroundColor?: string;
-    fontFamily?: string;
-    buttonColor?: string;
-    buttonTextColor?: string;
-    logoUrl?: string;
-    bannerUrl?: string;
-    textColor?: string;
-    linkColor?: string;
-  };
-}
-
-export interface DynamicForm {
-  id: string;
-  title: string;
-  description?: string;
-  sections: FormSection[];
-  settings: FormSettings;
-  status: 'draft' | 'published' | 'archived' | 'closed';
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  publishedAt?: string;
-  closedAt?: string;
-  responseCount: number;
-  averageTimeToComplete?: number;
-  tags?: string[];
-  collaborators?: string[];
-}
-
-// ============================================================
-// Response Types
-// ============================================================
-
-export interface GridResponse {
-  [rowId: string]: string | string[];
-}
-
-export interface FileResponse {
-  fileId: string;
-  fileName: string;
-  fileSize: number;
-  fileType: string;
-  fileUrl: string;
-}
-
-export interface QuestionResponse {
-  questionId: string;
-  value: string | number | boolean | string[] | FileResponse[] | GridResponse;
-  timestamp?: string;
-  isCorrect?: boolean;
-  pointsAwarded?: number;
-  pointsPossible?: number;
-}
-
-export interface SectionResponse {
-  sectionId: string;
-  responses: QuestionResponse[];
-  startedAt?: string;
-  completedAt?: string;
-  timeSpent?: number;
-}
-
-export interface FormSubmission {
-  id?: string;
-  formId: string;
-  formTitle: string;
-  submissionId: string;
-  respondentId?: string;
-  respondentEmail?: string;
-  respondentName?: string;
-  isLoggedIn: boolean;
-  sections: SectionResponse[];
-  totalTimeSpent?: number;
-  status: 'draft' | 'submitted' | 'edited' | 'deleted';
-  submittedAt?: string;
-  updatedAt: string;
-  score?: number;
-  maxScore?: number;
-  passed?: boolean;
-  gradedBy?: string;
-  gradedAt?: string;
-  feedback?: string;
-  correctAnswers?: {
-    [questionId: string]: string | number | boolean | string[];
-  };
-  ipAddress?: string;
-  userAgent?: string;
-  location?: {
-    country?: string;
-    city?: string;
-    lat?: number;
-    lng?: number;
-  };
-}
-
-// ============================================================
-// Create/Update Input Types
-// ============================================================
-
-export type CreateQuestionInput = Omit<Question, 'id' | 'options' | 'gridRows' | 'gridColumns'> & {
-  options?: Omit<QuestionOption, 'id'> & { id?: string }[];
-  gridRows?: Omit<QuestionGridRow, 'id'> & { id?: string }[];
-  gridColumns?: Omit<QuestionGridColumn, 'id'> & { id?: string }[];
-};
-
-export interface CreateSectionInput {
-  title: string;
-  description?: string;
-  questions: CreateQuestionInput[];
-  order: number;
-  type: 'section' | 'page';
-  imageUrl?: string;
-  videoUrl?: string;
-  conditionalLogic?: ConditionalLogic;
-}
-
-export interface CreateFormInput {
-  title: string;
-  description?: string;
-  sections: CreateSectionInput[];
-  settings?: Partial<FormSettings>;
-  template?: string;
-}
-
-export interface UpdateFormInput {
-  title?: string;
-  description?: string;
-  sections?: CreateSectionInput[];
-  settings?: Partial<FormSettings>;
-  status?: 'draft' | 'published' | 'archived' | 'closed';
-}
-
-export interface SubmitFormResponseInput {
-  respondentEmail?: string;
-  respondentName?: string;
-  sections: Omit<SectionResponse, 'sectionId'>[];
-  status?: 'draft' | 'submitted';
-}
-
-// ============================================================
-// Analytics Types
-// ============================================================
-
-export interface QuestionAnalytics {
-  questionId: string;
-  totalResponses: number;
-  skippedResponses: number;
-  averageValue?: number;
-  responseDistribution?: {
-    [value: string]: number;
-  };
-  averageTimeToAnswer?: number;
-}
-
-export interface FormAnalytics {
-  formId: string;
-  totalViews: number;
-  totalStarts: number;
-  totalSubmissions: number;
-  completionRate: number;
-  averageTime: number;
-  dailyStats: {
-    date: string;
-    views: number;
-    starts: number;
-    submissions: number;
-  }[];
-  questionAnalytics: QuestionAnalytics[];
-  countries: {
-    [country: string]: number;
-  };
-}
-
-export interface FormStatistics {
-  totalSubmissions: number;
-  draftCount: number;
-  submittedCount: number;
-  gradedCount: number;
-  averageScore: number | null;
-  submissionsByDate: Array<{ date: string; count: number }>;
-}
-
-// ============================================================
-// Template Types
-// ============================================================
-
-export interface FormTemplate {
-  id: string;
+export interface PendingProceedingItem {
+  division: string;
   name: string;
-  description: string;
+  quantity: number;
+}
+
+export type SubmissionStatus = 'submitted';
+
+export interface StationRequirementSubmission {
+  id?: string;
+  station: string;
+  courtOfAppeal: PendingProceedingItem[];
+  subordinateCourts: PendingProceedingItem[];
+  status: SubmissionStatus;
+  submittedAt: string;
+  updatedAt: string;
+  submittedBy?: string;
+  submitterName?: string;
+  submitterEmail?: string;
+  emailSent?: boolean;
+  emailSentAt?: string;
+  emailError?: string;
+}
+
+export interface StationRequirementSummary {
+  id?: string;
+  station: string;
+  courtOfAppealTotal: number;
+  subordinateCourtsTotal: number;
+  status: SubmissionStatus;
+  submittedAt: string;
+  updatedAt: string;
+  submitterName?: string;
+}
+
+export interface SubmissionStats {
+  totalStations: number;
+  submitted: number;
+  notSubmitted: number;
+  notStarted: number;
+}
+
+export interface CategoryItem {
   category: string;
-  icon?: string;
-  thumbnailUrl?: string;
-  sections: CreateSectionInput[];
-  settings: Partial<FormSettings>;
-  estimatedTime: number;
-  popularity: number;
-  isPremium: boolean;
+  items: string[];
 }
 
 // ============================================================
-// API Response Types
+// API RESPONSE SHAPES
 // ============================================================
-
-export interface FormsListResponse {
-  forms: DynamicForm[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-}
 
 export interface SubmissionsListResponse {
-  submissions: FormSubmission[];
+  submissions: StationRequirementSummary[];
   total: number;
   page: number;
   limit: number;
   hasMore: boolean;
 }
 
-export interface ExportResponse {
-  url: string;
-  format: 'csv' | 'excel' | 'pdf' | 'json';
-  filename: string;
+export interface SubmissionResponse {
+  submission: StationRequirementSubmission;
+  message?: string;
 }
-
-// ============================================================
-// API Error Response Type
-// ============================================================
 
 interface ApiErrorResponse {
   message?: string;
@@ -373,21 +82,82 @@ interface ApiErrorResponse {
 }
 
 // ============================================================
-// STATE
+// INPUT PAYLOAD TYPES
 // ============================================================
 
-interface FormBuilderState {
-  forms: DynamicForm[];
-  currentForm: DynamicForm | null;
-  submissions: FormSubmission[];
-  currentSubmission: FormSubmission | null;
-  statistics: FormStatistics | null;
-  analytics: FormAnalytics | null;
-  templates: FormTemplate[];
+export interface CreateSubmissionInput {
+  station: string;
+  courtOfAppeal: PendingProceedingItem[];
+  subordinateCourts: PendingProceedingItem[];
+}
+
+export interface UpdateSubmissionInput {
+  station?: string;
+  courtOfAppeal?: PendingProceedingItem[];
+  subordinateCourts?: PendingProceedingItem[];
+}
+
+export interface GetSubmissionsQuery {
+  station?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: 'updatedAt' | 'submittedAt' | 'station';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface AdminDashboardStats {
+  totalStations: number;
+  submissionsToday: number;
+  submittedCount: number;
+  notStartedCount: number;
+  completionRate: number;
+  recentActivity: Array<{
+    id: string;
+    station: string;
+    action: 'submitted' | 'updated';
+    timestamp: string;
+    user: string;
+    details?: string;
+  }>;
+}
+
+export interface ReportData {
+  rows: Array<{
+    'Station': string;
+    'Assigned DR': string;
+    'DR Email': string;
+    'Submission Status': 'Submitted' | 'Not Submitted';
+    'Court of Appeal Items': number;
+    'Subordinate Courts Items': number;
+    'Total Items': number;
+    'Submitted At': string;
+    'Last Updated': string;
+  }>;
+  summary: {
+    totalStations: number;
+    submitted: number;
+    notSubmitted: number;
+    totalCourtOfAppeal: number;
+    totalSubordinateCourts: number;
+    completionRate: number;
+  };
+}
+
+// ============================================================
+// STATE INTERFACE & INITIAL STATE
+// ============================================================
+
+interface PendingProceedingsState {
+  submissions: StationRequirementSummary[];
+  currentSubmission: StationRequirementSubmission | null;
+  stats: SubmissionStats | null;
+  categories: CategoryItem[];
+  dashboardStats: AdminDashboardStats | null;
+  reportData: ReportData | null;
   isLoading: boolean;
   isSubmitting: boolean;
-  isReviewing: boolean;
-  isExporting: boolean;
   error: string | null;
   pagination: {
     page: number;
@@ -396,18 +166,15 @@ interface FormBuilderState {
   };
 }
 
-const initialState: FormBuilderState = {
-  forms: [],
-  currentForm: null,
+const initialState: PendingProceedingsState = {
   submissions: [],
   currentSubmission: null,
-  statistics: null,
-  analytics: null,
-  templates: [],
+  stats: null,
+  categories: [],
+  dashboardStats: null,
+  reportData: null,
   isLoading: false,
   isSubmitting: false,
-  isReviewing: false,
-  isExporting: false,
   error: null,
   pagination: {
     page: 1,
@@ -417,700 +184,148 @@ const initialState: FormBuilderState = {
 };
 
 // ============================================================
-// ASYNC THUNKS - Forms
+// ASYNC THUNKS — Submissions
 // ============================================================
 
-// Get all forms
-export const getForms = createAsyncThunk<
-  FormsListResponse,
-  {
-    status?: 'draft' | 'published' | 'archived' | 'closed';
-    search?: string;
-    tags?: string[];
-    page?: number;
-    limit?: number;
-    sortBy?: 'createdAt' | 'updatedAt' | 'title' | 'status' | 'responseCount';
-    sortOrder?: 'asc' | 'desc';
-  },
-  { rejectValue: string }
->(
-  "formBuilder/getForms",
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const cleanParams: Record<string, string | number | boolean | string[]> = {};
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          if (Array.isArray(value) && value.length > 0) {
-            cleanParams[key] = value.join(',');
-          } else if (!Array.isArray(value)) {
-            cleanParams[key] = value;
-          }
-        }
-      });
-
-      if (!cleanParams.page) cleanParams.page = 1;
-      if (!cleanParams.limit) cleanParams.limit = 20;
-      if (!cleanParams.sortBy) cleanParams.sortBy = "createdAt";
-      if (!cleanParams.sortOrder) cleanParams.sortOrder = "desc";
-
-      const response = await axiosClient.get("/forms", { params: cleanParams });
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to fetch forms:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch forms."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Get form by ID
-export const getFormById = createAsyncThunk<
-  { form: DynamicForm },
-  string,
-  { rejectValue: string }
->(
-  "formBuilder/getFormById",
-  async (id, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.get(`/forms/${id}`);
-      return response.data.data;
-    } catch (err: unknown) {
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch form."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Create form
-export const createForm = createAsyncThunk<
-  { form: DynamicForm },
-  CreateFormInput,
-  { rejectValue: string }
->(
-  "formBuilder/createForm",
-  async (payload, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.post("/forms", payload);
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to create form:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to create form."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Update form
-export const updateForm = createAsyncThunk<
-  { form: DynamicForm },
-  { id: string; data: UpdateFormInput },
-  { rejectValue: string }
->(
-  "formBuilder/updateForm",
-  async ({ id, data }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.put(`/forms/${id}`, data);
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to update form:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to update form."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Delete form
-export const deleteForm = createAsyncThunk<
-  string,
-  string,
-  { rejectValue: string }
->(
-  "formBuilder/deleteForm",
-  async (id, { rejectWithValue }) => {
-    try {
-      await axiosClient.delete(`/forms/${id}`);
-      return id;
-    } catch (err: unknown) {
-      console.error("❌ Failed to delete form:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to delete form."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Publish form
-export const publishForm = createAsyncThunk<
-  { form: DynamicForm },
-  string,
-  { rejectValue: string }
->(
-  "formBuilder/publishForm",
-  async (id, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.put(`/forms/${id}/publish`);
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to publish form:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to publish form."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Unpublish form
-export const unpublishForm = createAsyncThunk<
-  { form: DynamicForm },
-  string,
-  { rejectValue: string }
->(
-  "formBuilder/unpublishForm",
-  async (id, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.put(`/forms/${id}/unpublish`);
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to unpublish form:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to unpublish form."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Duplicate form
-export const duplicateForm = createAsyncThunk<
-  { form: DynamicForm },
-  { formId: string; title?: string },
-  { rejectValue: string }
->(
-  "formBuilder/duplicateForm",
-  async ({ formId, title }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.post(`/forms/${formId}/duplicate`, { title });
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to duplicate form:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to duplicate form."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// ============================================================
-// ASYNC THUNKS - Sections
-// ============================================================
-
-// Add section
-export const addSection = createAsyncThunk<
-  { section: FormSection },
-  { formId: string; data: CreateSectionInput },
-  { rejectValue: string }
->(
-  "formBuilder/addSection",
-  async ({ formId, data }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.post(`/forms/${formId}/sections`, data);
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to add section:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to add section."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Delete section
-export const deleteSection = createAsyncThunk<
-  { sectionId: string },
-  { formId: string; sectionId: string },
-  { rejectValue: string }
->(
-  "formBuilder/deleteSection",
-  async ({ formId, sectionId }, { rejectWithValue }) => {
-    try {
-      await axiosClient.delete(`/forms/${formId}/sections/${sectionId}`);
-      return { sectionId };
-    } catch (err: unknown) {
-      console.error("❌ Failed to delete section:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to delete section."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Reorder sections
-export const reorderSections = createAsyncThunk<
-  { form: DynamicForm },
-  { formId: string; sectionOrders: Array<{ sectionId: string; order: number }> },
-  { rejectValue: string }
->(
-  "formBuilder/reorderSections",
-  async ({ formId, sectionOrders }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.put(`/forms/${formId}/sections/reorder`, { sectionOrders });
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to reorder sections:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to reorder sections."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// ============================================================
-// ASYNC THUNKS - Questions
-// ============================================================
-
-// Add question
-export const addQuestion = createAsyncThunk<
-  { question: Question },
-  { formId: string; sectionId: string; data: CreateQuestionInput; position?: number },
-  { rejectValue: string }
->(
-  "formBuilder/addQuestion",
-  async ({ formId, sectionId, data, position }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.post(
-        `/forms/${formId}/sections/${sectionId}/questions`,
-        { question: data, position }
-      );
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to add question:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to add question."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Update question
-export const updateQuestion = createAsyncThunk<
-  { question: Question },
-  { formId: string; sectionId: string; questionId: string; data: Partial<Question> },
-  { rejectValue: string }
->(
-  "formBuilder/updateQuestion",
-  async ({ formId, sectionId, questionId, data }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.put(
-        `/forms/${formId}/sections/${sectionId}/questions/${questionId}`,
-        data
-      );
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to update question:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to update question."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Delete question
-export const deleteQuestion = createAsyncThunk<
-  { questionId: string },
-  { formId: string; sectionId: string; questionId: string },
-  { rejectValue: string }
->(
-  "formBuilder/deleteQuestion",
-  async ({ formId, sectionId, questionId }, { rejectWithValue }) => {
-    try {
-      await axiosClient.delete(
-        `/forms/${formId}/sections/${sectionId}/questions/${questionId}`
-      );
-      return { questionId };
-    } catch (err: unknown) {
-      console.error("❌ Failed to delete question:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to delete question."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// ============================================================
-// ASYNC THUNKS - Submissions
-// ============================================================
-
-// Submit form response
-export const submitFormResponse = createAsyncThunk<
-  { submission: FormSubmission },
-  { formId: string; data: SubmitFormResponseInput },
-  { rejectValue: string }
->(
-  "formBuilder/submitFormResponse",
-  async ({ formId, data }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.post(`/forms/${formId}/submit`, data);
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to submit form response:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to submit form response."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Get form submissions
-export const getFormSubmissions = createAsyncThunk<
+export const getSubmissions = createAsyncThunk<
   SubmissionsListResponse,
-  {
-    formId: string;
-    respondentEmail?: string;
-    respondentName?: string;
-    status?: 'draft' | 'submitted' | 'edited' | 'deleted';
-    fromDate?: string;
-    toDate?: string;
-    graded?: boolean;
-    page?: number;
-    limit?: number;
-  },
+  GetSubmissionsQuery | void,
   { rejectValue: string }
 >(
-  "formBuilder/getFormSubmissions",
-  async ({ formId, ...params }, { rejectWithValue }) => {
-    try {
-      const cleanParams: Record<string, string | number | boolean> = {};
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          cleanParams[key] = value;
-        }
-      });
-
-      if (!cleanParams.page) cleanParams.page = 1;
-      if (!cleanParams.limit) cleanParams.limit = 20;
-
-      const response = await axiosClient.get(
-        `/forms/${formId}/submissions`,
-        { params: cleanParams }
-      );
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to fetch form submissions:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch form submissions."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Get my form submissions
-export const getMyFormSubmissions = createAsyncThunk<
-  SubmissionsListResponse,
-  {
-    formId?: string;
-    status?: 'draft' | 'submitted' | 'edited' | 'deleted';
-    page?: number;
-    limit?: number;
-  },
-  { rejectValue: string }
->(
-  "formBuilder/getMyFormSubmissions",
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const cleanParams: Record<string, string | number | boolean> = {};
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          cleanParams[key] = value;
-        }
-      });
-
-      if (!cleanParams.page) cleanParams.page = 1;
-      if (!cleanParams.limit) cleanParams.limit = 20;
-
-      const response = await axiosClient.get(
-        "/forms/my-submissions",
-        { params: cleanParams }
-      );
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to fetch your form submissions:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch your form submissions."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Get form submission by ID
-export const getFormSubmissionById = createAsyncThunk<
-  { submission: FormSubmission },
-  string,
-  { rejectValue: string }
->(
-  "formBuilder/getFormSubmissionById",
-  async (id, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.get(`/forms/submissions/${id}`);
-      return response.data.data;
-    } catch (err: unknown) {
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch submission."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Review form submission
-export const reviewFormSubmission = createAsyncThunk<
-  { submission: FormSubmission },
-  { id: string; feedback?: string; score?: number; passed?: boolean; questionScores?: Record<string, { isCorrect?: boolean; pointsAwarded?: number }> },
-  { rejectValue: string }
->(
-  "formBuilder/reviewFormSubmission",
-  async ({ id, ...data }, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.post(`/forms/submissions/${id}/review`, data);
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to review form submission:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to review form submission."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Delete form submission
-export const deleteFormSubmission = createAsyncThunk<
-  string,
-  string,
-  { rejectValue: string }
->(
-  "formBuilder/deleteFormSubmission",
-  async (id, { rejectWithValue }) => {
-    try {
-      await axiosClient.delete(`/forms/submissions/${id}`);
-      return id;
-    } catch (err: unknown) {
-      console.error("❌ Failed to delete form submission:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to delete form submission."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// ============================================================
-// ASYNC THUNKS - Statistics & Analytics
-// ============================================================
-
-// Get form statistics
-export const getFormStatistics = createAsyncThunk<
-  { stats: FormStatistics },
-  string,
-  { rejectValue: string }
->(
-  "formBuilder/getFormStatistics",
-  async (formId, { rejectWithValue }) => {
-    try {
-      const response = await axiosClient.get(`/forms/statistics/${formId}`);
-      return response.data.data;
-    } catch (err: unknown) {
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch form statistics."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Get form analytics
-export const getFormAnalytics = createAsyncThunk<
-  { analytics: FormAnalytics },
-  { formId: string; fromDate?: string; toDate?: string },
-  { rejectValue: string }
->(
-  "formBuilder/getFormAnalytics",
-  async ({ formId, fromDate, toDate }, { rejectWithValue }) => {
-    try {
-      const params: Record<string, string> = {};
-      if (fromDate) params.fromDate = fromDate;
-      if (toDate) params.toDate = toDate;
-
-      const response = await axiosClient.get(`/forms/analytics/${formId}`, { params });
-      return response.data.data;
-    } catch (err: unknown) {
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch form analytics."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// Export submissions
-export const exportSubmissions = createAsyncThunk<
-  ExportResponse,
-  {
-    formId: string;
-    format: 'csv' | 'excel' | 'pdf' | 'json';
-    fromDate?: string;
-    toDate?: string;
-    status?: 'draft' | 'submitted' | 'edited' | 'deleted';
-  },
-  { rejectValue: string }
->(
-  "formBuilder/exportSubmissions",
-  async ({ formId, ...params }, { rejectWithValue }) => {
-    try {
-      const cleanParams: Record<string, string> = {};
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          cleanParams[key] = String(value);
-        }
-      });
-
-      const response = await axiosClient.get(
-        `/forms/${formId}/export`,
-        { params: cleanParams }
-      );
-      return response.data.data;
-    } catch (err: unknown) {
-      console.error("❌ Failed to export submissions:", err);
-      if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to export submissions."
-        );
-      }
-      return rejectWithValue("An unexpected error occurred.");
-    }
-  }
-);
-
-// ============================================================
-// ASYNC THUNKS - Templates
-// ============================================================
-
-// Get form templates
-export const getFormTemplates = createAsyncThunk<
-  { templates: FormTemplate[] },
-  { category?: string; search?: string; limit?: number },
-  { rejectValue: string }
->(
-  "formBuilder/getFormTemplates",
+  "pendingProceedings/getSubmissions",
   async (params = {}, { rejectWithValue }) => {
     try {
       const cleanParams: Record<string, string | number> = {};
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          cleanParams[key] = value;
-        }
-      });
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== "") {
+            cleanParams[key] = value;
+          }
+        });
+      }
+      if (!cleanParams.page) cleanParams.page = 1;
+      if (!cleanParams.limit) cleanParams.limit = 20;
+      if (!cleanParams.sortBy) cleanParams.sortBy = "updatedAt";
+      if (!cleanParams.sortOrder) cleanParams.sortOrder = "desc";
 
-      const response = await axiosClient.get("/forms/templates", { params: cleanParams });
+      const response = await axiosClient.get("/pending-proceedings", { params: cleanParams });
       return response.data.data;
     } catch (err: unknown) {
-      console.error("❌ Failed to fetch templates:", err);
+      console.error("❌ Failed to fetch submissions:", err);
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch templates."
-        );
+        return rejectWithValue(err.response?.data?.message || "Failed to fetch submissions.");
       }
       return rejectWithValue("An unexpected error occurred.");
     }
   }
 );
 
-// Create form from template
-export const createFormFromTemplate = createAsyncThunk<
-  { form: DynamicForm },
-  { templateId: string; title?: string; settings?: Partial<FormSettings> },
+export const getMySubmissions = createAsyncThunk<
+  SubmissionsListResponse,
+  GetSubmissionsQuery | void,
   { rejectValue: string }
 >(
-  "formBuilder/createFormFromTemplate",
-  async ({ templateId, title, settings }, { rejectWithValue }) => {
+  "pendingProceedings/getMySubmissions",
+  async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await axiosClient.post(
-        `/forms/templates/${templateId}`,
-        { title, settings }
-      );
+      const cleanParams: Record<string, string | number> = {};
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== "") {
+            cleanParams[key] = value;
+          }
+        });
+      }
+      if (!cleanParams.page) cleanParams.page = 1;
+      if (!cleanParams.limit) cleanParams.limit = 20;
+      if (!cleanParams.sortBy) cleanParams.sortBy = "updatedAt";
+      if (!cleanParams.sortOrder) cleanParams.sortOrder = "desc";
+
+      const response = await axiosClient.get("/pending-proceedings/my-submissions", { params: cleanParams });
       return response.data.data;
     } catch (err: unknown) {
-      console.error("❌ Failed to create form from template:", err);
+      console.error("❌ Failed to fetch my submissions:", err);
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        return rejectWithValue(
-          err.response?.data?.message || "Failed to create form from template."
-        );
+        return rejectWithValue(err.response?.data?.message || "Failed to fetch my submissions.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+export const getSubmissionById = createAsyncThunk<
+  { submission: StationRequirementSubmission },
+  string,
+  { rejectValue: string }
+>(
+  "pendingProceedings/getSubmissionById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.get(`/pending-proceedings/${id}`);
+      return response.data.data;
+    } catch (err: unknown) {
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to fetch submission.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+export const createSubmission = createAsyncThunk<
+  { submission: StationRequirementSubmission },
+  CreateSubmissionInput,
+  { rejectValue: string }
+>(
+  "pendingProceedings/createSubmission",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.post("/pending-proceedings", payload);
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to create submission:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to create submission.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+export const updateSubmission = createAsyncThunk<
+  { submission: StationRequirementSubmission },
+  { id: string; data: UpdateSubmissionInput },
+  { rejectValue: string }
+>(
+  "pendingProceedings/updateSubmission",
+  async ({ id, data }, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.put(`/pending-proceedings/${id}`, data);
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to update submission:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to update submission.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+export const deleteSubmission = createAsyncThunk<
+  string,
+  string,
+  { rejectValue: string }
+>(
+  "pendingProceedings/deleteSubmission",
+  async (id, { rejectWithValue }) => {
+    try {
+      await axiosClient.delete(`/pending-proceedings/${id}`);
+      return id;
+    } catch (err: unknown) {
+      console.error("❌ Failed to delete submission:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to delete submission.");
       }
       return rejectWithValue("An unexpected error occurred.");
     }
@@ -1118,16 +333,137 @@ export const createFormFromTemplate = createAsyncThunk<
 );
 
 // ============================================================
-// SLICE
+// ASYNC THUNKS — Stats & Dashboard
 // ============================================================
 
-const formBuilderSlice = createSlice({
-  name: "formBuilder",
+export const getSubmissionStats = createAsyncThunk<
+  { stats: SubmissionStats },
+  void,
+  { rejectValue: string }
+>(
+  "pendingProceedings/getSubmissionStats",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.get("/pending-proceedings/stats");
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to fetch submission stats:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to fetch submission stats.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+export const getAdminDashboard = createAsyncThunk<
+  { data: AdminDashboardStats },
+  void,
+  { rejectValue: string }
+>(
+  "pendingProceedings/getAdminDashboard",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.get("/pending-proceedings/dashboard");
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to fetch admin dashboard:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to fetch admin dashboard.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+// ============================================================
+// ASYNC THUNKS — Categories
+// ============================================================
+
+export const getCategories = createAsyncThunk<
+  { data: CategoryItem[] },
+  void,
+  { rejectValue: string }
+>(
+  "pendingProceedings/getCategories",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.get("/pending-proceedings/categories");
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to fetch categories:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to fetch categories.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+// ============================================================
+// ASYNC THUNKS — Reports
+// ============================================================
+
+export const downloadReport = createAsyncThunk<
+  { data: ReportData; format: string },
+  { format?: 'pdf' | 'docx' | 'json'; fromDate?: string; toDate?: string },
+  { rejectValue: string }
+>(
+  "pendingProceedings/downloadReport",
+  async ({ format = 'json', fromDate, toDate }, { rejectWithValue }) => {
+    try {
+      const params: Record<string, string> = { format };
+      if (fromDate) params.fromDate = fromDate;
+      if (toDate) params.toDate = toDate;
+      
+      const response = await axiosClient.get("/pending-proceedings/download-report", { params });
+      return { data: response.data.data, format };
+    } catch (err: unknown) {
+      console.error("❌ Failed to download report:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to download report.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+// ============================================================
+// ASYNC THUNKS — Bulk Operations
+// ============================================================
+
+export const bulkUpsertSubmissions = createAsyncThunk<
+  { 
+    results: StationRequirementSubmission[];
+    errors: Array<{ station: string; error: string }>;
+    summary: { total: number; successful: number; failed: number };
+  },
+  Array<{ id?: string; station: string; courtOfAppeal: PendingProceedingItem[]; subordinateCourts: PendingProceedingItem[] }>,
+  { rejectValue: string }
+>(
+  "pendingProceedings/bulkUpsertSubmissions",
+  async (submissions, { rejectWithValue }) => {
+    try {
+      const response = await axiosClient.post("/pending-proceedings/bulk", { submissions });
+      return response.data.data;
+    } catch (err: unknown) {
+      console.error("❌ Failed to bulk upsert submissions:", err);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        return rejectWithValue(err.response?.data?.message || "Failed to bulk upsert submissions.");
+      }
+      return rejectWithValue("An unexpected error occurred.");
+    }
+  }
+);
+
+// ============================================================
+// SLICE DEFINITION
+// ============================================================
+
+const pendingProceedingsSlice = createSlice({
+  name: "pendingProceedings",
   initialState,
   reducers: {
-    clearCurrentForm: (state) => {
-      state.currentForm = null;
-    },
     clearCurrentSubmission: (state) => {
       state.currentSubmission = null;
     },
@@ -1135,11 +471,7 @@ const formBuilderSlice = createSlice({
       state.error = null;
     },
     resetPagination: (state) => {
-      state.pagination = {
-        page: 1,
-        limit: 20,
-        total: 0,
-      };
+      state.pagination = { page: 1, limit: 20, total: 0 };
     },
     setPage: (state, action: PayloadAction<number>) => {
       state.pagination.page = action.payload;
@@ -1147,297 +479,27 @@ const formBuilderSlice = createSlice({
     setLimit: (state, action: PayloadAction<number>) => {
       state.pagination.limit = action.payload;
     },
-    clearStatistics: (state) => {
-      state.statistics = null;
+    clearDashboardStats: (state) => {
+      state.dashboardStats = null;
     },
-    clearAnalytics: (state) => {
-      state.analytics = null;
+    clearReportData: (state) => {
+      state.reportData = null;
     },
-    clearTemplates: (state) => {
-      state.templates = [];
+    clearCategories: (state) => {
+      state.categories = [];
+    },
+    clearStats: (state) => {
+      state.stats = null;
     },
   },
   extraReducers: (builder) => {
     builder
-      // ============================================================
-      // getForms
-      // ============================================================
-      .addCase(getForms.pending, (state) => {
+      // ---------- getSubmissions ----------
+      .addCase(getSubmissions.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getForms.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.forms = action.payload.forms;
-        state.pagination = {
-          page: action.payload.page,
-          limit: action.payload.limit,
-          total: action.payload.total,
-        };
-      })
-      .addCase(getForms.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload || "Failed to fetch forms";
-      })
-
-      // ============================================================
-      // getFormById
-      // ============================================================
-      .addCase(getFormById.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(getFormById.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.currentForm = action.payload.form;
-      })
-      .addCase(getFormById.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload || "Failed to fetch form";
-      })
-
-      // ============================================================
-      // createForm
-      // ============================================================
-      .addCase(createForm.pending, (state) => {
-        state.isSubmitting = true;
-        state.error = null;
-      })
-      .addCase(createForm.fulfilled, (state, action) => {
-        state.isSubmitting = false;
-        state.currentForm = action.payload.form;
-        state.forms.unshift(action.payload.form);
-      })
-      .addCase(createForm.rejected, (state, action) => {
-        state.isSubmitting = false;
-        state.error = action.payload || "Failed to create form";
-      })
-
-      // ============================================================
-      // updateForm
-      // ============================================================
-      .addCase(updateForm.pending, (state) => {
-        state.isSubmitting = true;
-        state.error = null;
-      })
-      .addCase(updateForm.fulfilled, (state, action) => {
-        state.isSubmitting = false;
-        state.currentForm = action.payload.form;
-        const index = state.forms.findIndex((f) => f.id === action.payload.form.id);
-        if (index !== -1) {
-          state.forms[index] = action.payload.form;
-        }
-      })
-      .addCase(updateForm.rejected, (state, action) => {
-        state.isSubmitting = false;
-        state.error = action.payload || "Failed to update form";
-      })
-
-      // ============================================================
-      // deleteForm
-      // ============================================================
-      .addCase(deleteForm.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(deleteForm.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.forms = state.forms.filter((f) => f.id !== action.payload);
-        if (state.currentForm?.id === action.payload) {
-          state.currentForm = null;
-        }
-      })
-      .addCase(deleteForm.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload || "Failed to delete form";
-      })
-
-      // ============================================================
-      // publishForm
-      // ============================================================
-      .addCase(publishForm.pending, (state) => {
-        state.isSubmitting = true;
-        state.error = null;
-      })
-      .addCase(publishForm.fulfilled, (state, action) => {
-        state.isSubmitting = false;
-        state.currentForm = action.payload.form;
-        const index = state.forms.findIndex((f) => f.id === action.payload.form.id);
-        if (index !== -1) {
-          state.forms[index] = action.payload.form;
-        }
-      })
-      .addCase(publishForm.rejected, (state, action) => {
-        state.isSubmitting = false;
-        state.error = action.payload || "Failed to publish form";
-      })
-
-      // ============================================================
-      // unpublishForm
-      // ============================================================
-      .addCase(unpublishForm.pending, (state) => {
-        state.isSubmitting = true;
-        state.error = null;
-      })
-      .addCase(unpublishForm.fulfilled, (state, action) => {
-        state.isSubmitting = false;
-        state.currentForm = action.payload.form;
-        const index = state.forms.findIndex((f) => f.id === action.payload.form.id);
-        if (index !== -1) {
-          state.forms[index] = action.payload.form;
-        }
-      })
-      .addCase(unpublishForm.rejected, (state, action) => {
-        state.isSubmitting = false;
-        state.error = action.payload || "Failed to unpublish form";
-      })
-
-      // ============================================================
-      // duplicateForm
-      // ============================================================
-      .addCase(duplicateForm.pending, (state) => {
-        state.isSubmitting = true;
-        state.error = null;
-      })
-      .addCase(duplicateForm.fulfilled, (state, action) => {
-        state.isSubmitting = false;
-        state.forms.unshift(action.payload.form);
-      })
-      .addCase(duplicateForm.rejected, (state, action) => {
-        state.isSubmitting = false;
-        state.error = action.payload || "Failed to duplicate form";
-      })
-
-      // ============================================================
-      // addSection
-      // ============================================================
-      .addCase(addSection.fulfilled, (state, action) => {
-        if (state.currentForm) {
-          state.currentForm.sections.push(action.payload.section);
-          // Update in forms list
-          const index = state.forms.findIndex((f) => f.id === state.currentForm?.id);
-          if (index !== -1) {
-            state.forms[index] = { ...state.currentForm };
-          }
-        }
-      })
-
-      // ============================================================
-      // deleteSection
-      // ============================================================
-      .addCase(deleteSection.fulfilled, (state, action) => {
-        if (state.currentForm) {
-          state.currentForm.sections = state.currentForm.sections.filter(
-            (s) => s.id !== action.payload.sectionId
-          );
-          const index = state.forms.findIndex((f) => f.id === state.currentForm?.id);
-          if (index !== -1) {
-            state.forms[index] = { ...state.currentForm };
-          }
-        }
-      })
-
-      // ============================================================
-      // reorderSections
-      // ============================================================
-      .addCase(reorderSections.fulfilled, (state, action) => {
-        state.currentForm = action.payload.form;
-        const index = state.forms.findIndex((f) => f.id === action.payload.form.id);
-        if (index !== -1) {
-          state.forms[index] = action.payload.form;
-        }
-      })
-
-      // ============================================================
-      // addQuestion
-      // ============================================================
-      .addCase(addQuestion.fulfilled, (state, action) => {
-        if (state.currentForm) {
-          for (const section of state.currentForm.sections) {
-            const questionIndex = section.questions.findIndex(
-              (q) => q.id === action.payload.question.id
-            );
-            if (questionIndex !== -1) {
-              section.questions[questionIndex] = action.payload.question;
-              break;
-            }
-            // If not found, it's a new question - add it
-            if (!section.questions.some((q) => q.id === action.payload.question.id)) {
-              // Find the section that should contain this question
-              // For simplicity, we'll add it to the first section
-              // In a real app, you'd track which section the question belongs to
-              section.questions.push(action.payload.question);
-              break;
-            }
-          }
-          const index = state.forms.findIndex((f) => f.id === state.currentForm?.id);
-          if (index !== -1) {
-            state.forms[index] = { ...state.currentForm };
-          }
-        }
-      })
-
-      // ============================================================
-      // updateQuestion
-      // ============================================================
-      .addCase(updateQuestion.fulfilled, (state, action) => {
-        if (state.currentForm) {
-          for (const section of state.currentForm.sections) {
-            const index = section.questions.findIndex((q) => q.id === action.payload.question.id);
-            if (index !== -1) {
-              section.questions[index] = action.payload.question;
-              break;
-            }
-          }
-          const formIndex = state.forms.findIndex((f) => f.id === state.currentForm?.id);
-          if (formIndex !== -1) {
-            state.forms[formIndex] = { ...state.currentForm };
-          }
-        }
-      })
-
-      // ============================================================
-      // deleteQuestion
-      // ============================================================
-      .addCase(deleteQuestion.fulfilled, (state, action) => {
-        if (state.currentForm) {
-          for (const section of state.currentForm.sections) {
-            section.questions = section.questions.filter(
-              (q) => q.id !== action.payload.questionId
-            );
-          }
-          const formIndex = state.forms.findIndex((f) => f.id === state.currentForm?.id);
-          if (formIndex !== -1) {
-            state.forms[formIndex] = { ...state.currentForm };
-          }
-        }
-      })
-
-      // ============================================================
-      // submitFormResponse
-      // ============================================================
-      .addCase(submitFormResponse.pending, (state) => {
-        state.isSubmitting = true;
-        state.error = null;
-      })
-      .addCase(submitFormResponse.fulfilled, (state, action) => {
-        state.isSubmitting = false;
-        state.currentSubmission = action.payload.submission;
-        state.submissions.unshift(action.payload.submission);
-      })
-      .addCase(submitFormResponse.rejected, (state, action) => {
-        state.isSubmitting = false;
-        state.error = action.payload || "Failed to submit form response";
-      })
-
-      // ============================================================
-      // getFormSubmissions
-      // ============================================================
-      .addCase(getFormSubmissions.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(getFormSubmissions.fulfilled, (state, action) => {
+      .addCase(getSubmissions.fulfilled, (state, action) => {
         state.isLoading = false;
         state.submissions = action.payload.submissions;
         state.pagination = {
@@ -1446,19 +508,17 @@ const formBuilderSlice = createSlice({
           total: action.payload.total,
         };
       })
-      .addCase(getFormSubmissions.rejected, (state, action) => {
+      .addCase(getSubmissions.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || "Failed to fetch form submissions";
+        state.error = action.payload || "Failed to fetch submissions";
       })
 
-      // ============================================================
-      // getMyFormSubmissions
-      // ============================================================
-      .addCase(getMyFormSubmissions.pending, (state) => {
+      // ---------- getMySubmissions ----------
+      .addCase(getMySubmissions.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getMyFormSubmissions.fulfilled, (state, action) => {
+      .addCase(getMySubmissions.fulfilled, (state, action) => {
         state.isLoading = false;
         state.submissions = action.payload.submissions;
         state.pagination = {
@@ -1467,162 +527,193 @@ const formBuilderSlice = createSlice({
           total: action.payload.total,
         };
       })
-      .addCase(getMyFormSubmissions.rejected, (state, action) => {
+      .addCase(getMySubmissions.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || "Failed to fetch your form submissions";
+        state.error = action.payload || "Failed to fetch my submissions";
       })
 
-      // ============================================================
-      // getFormSubmissionById
-      // ============================================================
-      .addCase(getFormSubmissionById.pending, (state) => {
+      // ---------- getSubmissionById ----------
+      .addCase(getSubmissionById.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getFormSubmissionById.fulfilled, (state, action) => {
+      .addCase(getSubmissionById.fulfilled, (state, action) => {
         state.isLoading = false;
         state.currentSubmission = action.payload.submission;
       })
-      .addCase(getFormSubmissionById.rejected, (state, action) => {
+      .addCase(getSubmissionById.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || "Failed to fetch form submission";
+        state.error = action.payload || "Failed to fetch submission";
       })
 
-      // ============================================================
-      // reviewFormSubmission
-      // ============================================================
-      .addCase(reviewFormSubmission.pending, (state) => {
-        state.isReviewing = true;
+      // ---------- createSubmission ----------
+      .addCase(createSubmission.pending, (state) => {
+        state.isSubmitting = true;
         state.error = null;
       })
-      .addCase(reviewFormSubmission.fulfilled, (state, action) => {
-        state.isReviewing = false;
+      .addCase(createSubmission.fulfilled, (state, action) => {
+        state.isSubmitting = false;
+        state.currentSubmission = action.payload.submission;
+        state.submissions.unshift({
+          id: action.payload.submission.id,
+          station: action.payload.submission.station,
+          courtOfAppealTotal: action.payload.submission.courtOfAppeal.reduce((sum, item) => sum + item.quantity, 0),
+          subordinateCourtsTotal: action.payload.submission.subordinateCourts.reduce((sum, item) => sum + item.quantity, 0),
+          status: action.payload.submission.status,
+          submittedAt: action.payload.submission.submittedAt,
+          updatedAt: action.payload.submission.updatedAt,
+          submitterName: action.payload.submission.submitterName,
+        });
+      })
+      .addCase(createSubmission.rejected, (state, action) => {
+        state.isSubmitting = false;
+        state.error = action.payload || "Failed to create submission";
+      })
+
+      // ---------- updateSubmission ----------
+      .addCase(updateSubmission.pending, (state) => {
+        state.isSubmitting = true;
+        state.error = null;
+      })
+      .addCase(updateSubmission.fulfilled, (state, action) => {
+        state.isSubmitting = false;
         state.currentSubmission = action.payload.submission;
         const index = state.submissions.findIndex((s) => s.id === action.payload.submission.id);
         if (index !== -1) {
-          state.submissions[index] = action.payload.submission;
+          state.submissions[index] = {
+            id: action.payload.submission.id,
+            station: action.payload.submission.station,
+            courtOfAppealTotal: action.payload.submission.courtOfAppeal.reduce((sum, item) => sum + item.quantity, 0),
+            subordinateCourtsTotal: action.payload.submission.subordinateCourts.reduce((sum, item) => sum + item.quantity, 0),
+            status: action.payload.submission.status,
+            submittedAt: action.payload.submission.submittedAt,
+            updatedAt: action.payload.submission.updatedAt,
+            submitterName: action.payload.submission.submitterName,
+          };
         }
       })
-      .addCase(reviewFormSubmission.rejected, (state, action) => {
-        state.isReviewing = false;
-        state.error = action.payload || "Failed to review form submission";
+      .addCase(updateSubmission.rejected, (state, action) => {
+        state.isSubmitting = false;
+        state.error = action.payload || "Failed to update submission";
       })
 
-      // ============================================================
-      // deleteFormSubmission
-      // ============================================================
-      .addCase(deleteFormSubmission.pending, (state) => {
+      // ---------- deleteSubmission ----------
+      .addCase(deleteSubmission.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(deleteFormSubmission.fulfilled, (state, action) => {
+      .addCase(deleteSubmission.fulfilled, (state, action) => {
         state.isLoading = false;
         state.submissions = state.submissions.filter((s) => s.id !== action.payload);
-        if (state.currentSubmission?.id === action.payload) {
-          state.currentSubmission = null;
-        }
+        if (state.currentSubmission?.id === action.payload) state.currentSubmission = null;
       })
-      .addCase(deleteFormSubmission.rejected, (state, action) => {
+      .addCase(deleteSubmission.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || "Failed to delete form submission";
+        state.error = action.payload || "Failed to delete submission";
       })
 
-      // ============================================================
-      // getFormStatistics
-      // ============================================================
-      .addCase(getFormStatistics.pending, (state) => {
+      // ---------- getSubmissionStats ----------
+      .addCase(getSubmissionStats.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getFormStatistics.fulfilled, (state, action) => {
+      .addCase(getSubmissionStats.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.statistics = action.payload.stats;
+        state.stats = action.payload.stats;
       })
-      .addCase(getFormStatistics.rejected, (state, action) => {
+      .addCase(getSubmissionStats.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || "Failed to fetch form statistics";
+        state.error = action.payload || "Failed to fetch submission stats";
       })
 
-      // ============================================================
-      // getFormAnalytics
-      // ============================================================
-      .addCase(getFormAnalytics.pending, (state) => {
+      // ---------- getAdminDashboard ----------
+      .addCase(getAdminDashboard.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getFormAnalytics.fulfilled, (state, action) => {
+      .addCase(getAdminDashboard.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.analytics = action.payload.analytics;
+        state.dashboardStats = action.payload.data;
       })
-      .addCase(getFormAnalytics.rejected, (state, action) => {
+      .addCase(getAdminDashboard.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || "Failed to fetch form analytics";
+        state.error = action.payload || "Failed to fetch admin dashboard";
       })
 
-      // ============================================================
-      // exportSubmissions
-      // ============================================================
-      .addCase(exportSubmissions.pending, (state) => {
-        state.isExporting = true;
-        state.error = null;
-      })
-      .addCase(exportSubmissions.fulfilled, (state) => {
-        state.isExporting = false;
-      })
-      .addCase(exportSubmissions.rejected, (state, action) => {
-        state.isExporting = false;
-        state.error = action.payload || "Failed to export submissions";
-      })
-
-      // ============================================================
-      // getFormTemplates
-      // ============================================================
-      .addCase(getFormTemplates.pending, (state) => {
+      // ---------- getCategories ----------
+      .addCase(getCategories.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getFormTemplates.fulfilled, (state, action) => {
+      .addCase(getCategories.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.templates = action.payload.templates;
+        state.categories = action.payload.data;
       })
-      .addCase(getFormTemplates.rejected, (state, action) => {
+      .addCase(getCategories.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload || "Failed to fetch templates";
+        state.error = action.payload || "Failed to fetch categories";
       })
 
-      // ============================================================
-      // createFormFromTemplate
-      // ============================================================
-      .addCase(createFormFromTemplate.pending, (state) => {
+      // ---------- downloadReport ----------
+      .addCase(downloadReport.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadReport.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.reportData = action.payload.data;
+      })
+      .addCase(downloadReport.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || "Failed to download report";
+      })
+
+      // ---------- bulkUpsertSubmissions ----------
+      .addCase(bulkUpsertSubmissions.pending, (state) => {
         state.isSubmitting = true;
         state.error = null;
       })
-      .addCase(createFormFromTemplate.fulfilled, (state, action) => {
+      .addCase(bulkUpsertSubmissions.fulfilled, (state, action) => {
         state.isSubmitting = false;
-        state.forms.unshift(action.payload.form);
-        state.currentForm = action.payload.form;
+        // Refresh submissions list after bulk operation
+        // The individual results will be added/updated in the list
+        const results = action.payload.results;
+        for (const result of results) {
+          const existingIndex = state.submissions.findIndex((s) => s.id === result.id);
+          const summary = {
+            id: result.id,
+            station: result.station,
+            courtOfAppealTotal: result.courtOfAppeal.reduce((sum, item) => sum + item.quantity, 0),
+            subordinateCourtsTotal: result.subordinateCourts.reduce((sum, item) => sum + item.quantity, 0),
+            status: result.status,
+            submittedAt: result.submittedAt,
+            updatedAt: result.updatedAt,
+            submitterName: result.submitterName,
+          };
+          if (existingIndex !== -1) {
+            state.submissions[existingIndex] = summary;
+          } else {
+            state.submissions.unshift(summary);
+          }
+        }
       })
-      .addCase(createFormFromTemplate.rejected, (state, action) => {
+      .addCase(bulkUpsertSubmissions.rejected, (state, action) => {
         state.isSubmitting = false;
-        state.error = action.payload || "Failed to create form from template";
+        state.error = action.payload || "Failed to bulk upsert submissions";
       });
   },
 });
 
-// ============================================================
-// EXPORTS
-// ============================================================
-
 export const {
-  clearCurrentForm,
   clearCurrentSubmission,
   clearError,
   resetPagination,
   setPage,
   setLimit,
-  clearStatistics,
-  clearAnalytics,
-  clearTemplates,
-} = formBuilderSlice.actions;
+  clearDashboardStats,
+  clearReportData,
+  clearCategories,
+  clearStats,
+} = pendingProceedingsSlice.actions;
 
-export default formBuilderSlice.reducer;
+export default pendingProceedingsSlice.reducer;

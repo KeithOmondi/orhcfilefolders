@@ -9,7 +9,7 @@ import authReducer, {
 } from './slices/authSlice';
 import stationRequirementsReducer from './slices/stationRequirementsSlice';
 import usersReducer from "./slices/userSlice"
-import formBuilderReducer from "./slices/formBuilderSlice"
+import pendingProceedingsReducer from "./slices/formBuilderSlice"
 import { injectStore } from '../api/api';
 
 // Configure the store
@@ -18,7 +18,7 @@ export const store = configureStore({
     auth: authReducer,
     stationRequirements: stationRequirementsReducer,
     users: usersReducer,
-    formBuilder: formBuilderReducer
+    pendingProceedings: pendingProceedingsReducer
   },
   // Add middleware or other configurations if needed
   middleware: (getDefaultMiddleware) =>
