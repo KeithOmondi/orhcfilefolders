@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
 import {
   createSubmission,
   updateSubmission,
@@ -159,9 +160,6 @@ const DrForm: React.FC<DrFormProps> = ({
   const [courtOfAppealValues, setCourtOfAppealValues] = useState<CategoryValues>(initialValues.courtOfAppealValues);
   const [subordinateCourtsValues, setSubordinateCourtsValues] = useState<CategoryValues>(initialValues.subordinateCourtsValues);
 
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(editMode);
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -174,13 +172,12 @@ const DrForm: React.FC<DrFormProps> = ({
     if (loadDraftId && accessToken && !isInitializing) {
       const loadDraft = async () => {
         setIsLoadingDraft(true);
-        setErrorMessage(null);
         try {
           const result = await dispatch(getSubmissionById(loadDraftId)).unwrap();
           const submission = result.submission;
           
           if (submission.status !== 'submitted') {
-            setErrorMessage('This submission has already been submitted and cannot be edited.');
+            toast.error('This submission has already been submitted and cannot be edited.');
             setIsSubmitted(true);
             setIsLoadingDraft(false);
             return;
@@ -204,6 +201,7 @@ const DrForm: React.FC<DrFormProps> = ({
             onDraftLoaded(submission);
           }
           
+          toast.success('Draft loaded successfully');
           console.log('✅ Draft loaded successfully:', {
             id: submission.id,
             station: submission.station,
@@ -212,7 +210,7 @@ const DrForm: React.FC<DrFormProps> = ({
           });
         } catch (err) {
           console.error('❌ Failed to load draft:', err);
-          setErrorMessage('Failed to load draft. Please try again.');
+          toast.error('Failed to load draft. Please try again.');
         } finally {
           setIsLoadingDraft(false);
         }
@@ -250,6 +248,14 @@ const DrForm: React.FC<DrFormProps> = ({
       }
     };
   }, [dispatch, editMode, loadDraftId]);
+
+  // Show error toast when redux error changes
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearError());
+    }
+  }, [error, dispatch]);
 
   const handleCourtOfAppealChange = (division: string, name: string, value: number): void => {
     if (isSubmitted) return;
@@ -313,16 +319,13 @@ const DrForm: React.FC<DrFormProps> = ({
   };
 
   const handleSubmit = async (): Promise<void> => {
-    setErrorMessage(null);
-    setShowSuccess(false);
-
     if (isSubmitted) {
-      setErrorMessage('This submission has already been submitted and cannot be modified.');
+      toast.error('This submission has already been submitted and cannot be modified.');
       return;
     }
 
     if (!formData.station.trim()) {
-      setErrorMessage('Please enter a station name.');
+      toast.error('Please enter a station name.');
       return;
     }
 
@@ -331,9 +334,11 @@ const DrForm: React.FC<DrFormProps> = ({
     const hasSubordinateCourts = data.subordinateCourts.length > 0;
 
     if (!hasCourtOfAppeal && !hasSubordinateCourts) {
-      setErrorMessage('Enter at least one quantity greater than 0 in either Court of Appeal or Subordinate Courts.');
+      toast.error('Enter at least one quantity greater than 0 in either Court of Appeal or Subordinate Courts.');
       return;
     }
+
+    const loadingToast = toast.loading('Submitting...');
 
     console.log('📤 Submitting pending proceedings:', {
       station: data.station,
@@ -356,7 +361,7 @@ const DrForm: React.FC<DrFormProps> = ({
           }
         };
         result = await dispatch(updateSubmission(payload)).unwrap();
-        setSuccessMessage('Submission updated successfully!');
+        toast.success('Submission updated successfully!', { id: loadingToast });
       } else {
         const payload = {
           station: data.station,
@@ -364,20 +369,14 @@ const DrForm: React.FC<DrFormProps> = ({
           subordinateCourts: data.subordinateCourts,
         };
         result = await dispatch(createSubmission(payload)).unwrap();
-        setSuccessMessage('Submission created successfully!');
+        toast.success('Submission created successfully!', { id: loadingToast });
       }
 
       console.log('✅ Submission successful:', result);
 
       setIsSubmitted(true);
-      setShowSuccess(true);
 
       setFormData(prev => ({ ...prev, status: 'submitted' }));
-
-      setTimeout(() => {
-        setShowSuccess(false);
-        setSuccessMessage('');
-      }, 5000);
 
       if (onSubmitted) {
         onSubmitted();
@@ -385,7 +384,7 @@ const DrForm: React.FC<DrFormProps> = ({
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to save submission. Please try again.';
       console.error('❌ Submission error:', err);
-      setErrorMessage(errorMsg);
+      toast.error(errorMsg, { id: loadingToast });
     }
   };
 
@@ -507,8 +506,8 @@ const DrForm: React.FC<DrFormProps> = ({
           <div className="text-xs uppercase tracking-widest text-[#c9b98a] mb-2">
             Data Collection · Pending Proceedings
           </div>
-          <h1 className="text-2xl font-semibold mb-2">
-            {isSubmitted ? 'Submission Complete' : (isEditing ? 'Edit Submission' : 'Pending Proceedings Form')}
+          <h1 className="text-2xl font-semibold mb-2 font-serif uppercase">
+            {isSubmitted ? 'Submission Complete' : (isEditing ? 'Edit Submission' : 'Audit of Pending Requests for Typed Proceedings')}
           </h1>
           {isEditing && !isSubmitted && (
             <div className="text-sm text-[#c9b98a] mb-2">
@@ -537,15 +536,16 @@ const DrForm: React.FC<DrFormProps> = ({
         {!isSubmitted && (
           <div className="bg-white border border-gray-300 rounded-lg p-6 mb-8 text-sm text-gray-700 space-y-3">
             <p>
-              Please indicate the number of pending proceedings for each category at your station.
+              Delay in the provision of typed proceedings has been identified as one of the major impediments to the expeditious determination of appeals, both in the Court of Appeal and in the High Court. To enable management develop targeted interventions to address this challenge, we intend to undertake an audit of cases where proceedings are yet to be supplied by the lower court for purposes of an appeal in the High Court, as well as cases where the High Court is yet to provide proceedings requested by the Court of Appeal.
             </p>
             <p>
-              Kindly indicate the required quantity for each category based on the 
-              pending cases at your station/division/sub-registry.
+              Kindly fill in the details below to facilitate the initial audit, indicating the number of cases in which typed proceedings remain outstanding.
             </p>
             <p>
-              Please indicate &ldquo;0&rdquo; where a particular item is not applicable to your
-              station/division/sub-registry.
+              We would appreciate receiving the requested information by COB today to enable us forward the same in good time for the initial assessment and identification of appropriate interventions.
+            </p>
+            <p>
+              We apologise for the short notice.
             </p>
             <p className="font-semibold">RHC</p>
           </div>
@@ -647,22 +647,6 @@ const DrForm: React.FC<DrFormProps> = ({
           {isSubmitted && (
             <div className="bg-green-50 border border-green-300 text-green-800 px-6 py-3 rounded-md text-sm font-semibold">
               ✓ This form has been submitted and is locked
-            </div>
-          )}
-
-          {showSuccess && (
-            <div className="bg-green-50 border border-green-300 text-green-800 px-4 py-2 rounded-md text-sm">
-              ✓ {successMessage}
-            </div>
-          )}
-          {errorMessage && (
-            <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-2 rounded-md text-sm">
-              ✗ {errorMessage}
-            </div>
-          )}
-          {error && (
-            <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-2 rounded-md text-sm">
-              ✗ {error}
             </div>
           )}
         </div>

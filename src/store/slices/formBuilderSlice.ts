@@ -184,6 +184,25 @@ const initialState: PendingProceedingsState = {
 };
 
 // ============================================================
+// HELPER FUNCTIONS
+// ============================================================
+
+const calculateTotals = (items: PendingProceedingItem[]): number => {
+  return items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+};
+
+const createSummary = (submission: StationRequirementSubmission): StationRequirementSummary => ({
+  id: submission.id,
+  station: submission.station,
+  courtOfAppealTotal: calculateTotals(submission.courtOfAppeal),
+  subordinateCourtsTotal: calculateTotals(submission.subordinateCourts),
+  status: submission.status,
+  submittedAt: submission.submittedAt,
+  updatedAt: submission.updatedAt,
+  submitterName: submission.submitterName,
+});
+
+// ============================================================
 // ASYNC THUNKS — Submissions
 // ============================================================
 
@@ -209,6 +228,12 @@ export const getSubmissions = createAsyncThunk<
       if (!cleanParams.sortOrder) cleanParams.sortOrder = "desc";
 
       const response = await axiosClient.get("/pending-proceedings", { params: cleanParams });
+      
+      // ✅ Ensure we have data
+      if (!response.data?.data) {
+        throw new Error("Invalid response structure");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to fetch submissions:", err);
@@ -242,6 +267,11 @@ export const getMySubmissions = createAsyncThunk<
       if (!cleanParams.sortOrder) cleanParams.sortOrder = "desc";
 
       const response = await axiosClient.get("/pending-proceedings/my-submissions", { params: cleanParams });
+      
+      if (!response.data?.data) {
+        throw new Error("Invalid response structure");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to fetch my submissions:", err);
@@ -262,6 +292,11 @@ export const getSubmissionById = createAsyncThunk<
   async (id, { rejectWithValue }) => {
     try {
       const response = await axiosClient.get(`/pending-proceedings/${id}`);
+      
+      if (!response.data?.data?.submission) {
+        throw new Error("Invalid response structure");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
@@ -281,6 +316,16 @@ export const createSubmission = createAsyncThunk<
   async (payload, { rejectWithValue }) => {
     try {
       const response = await axiosClient.post("/pending-proceedings", payload);
+      
+      // ✅ Debug log to see the actual response
+      console.log("📤 Create submission response:", response.data);
+      
+      // ✅ Validate response structure
+      if (!response.data?.data?.submission) {
+        console.error("❌ Invalid response structure:", response.data);
+        return rejectWithValue("Invalid response structure from server");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to create submission:", err);
@@ -301,6 +346,16 @@ export const updateSubmission = createAsyncThunk<
   async ({ id, data }, { rejectWithValue }) => {
     try {
       const response = await axiosClient.put(`/pending-proceedings/${id}`, data);
+      
+      // ✅ Debug log to see the actual response
+      console.log("📤 Update submission response:", response.data);
+      
+      // ✅ Validate response structure
+      if (!response.data?.data?.submission) {
+        console.error("❌ Invalid response structure:", response.data);
+        return rejectWithValue("Invalid response structure from server");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to update submission:", err);
@@ -345,6 +400,11 @@ export const getSubmissionStats = createAsyncThunk<
   async (_, { rejectWithValue }) => {
     try {
       const response = await axiosClient.get("/pending-proceedings/stats");
+      
+      if (!response.data?.data?.stats) {
+        throw new Error("Invalid response structure");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to fetch submission stats:", err);
@@ -365,6 +425,11 @@ export const getAdminDashboard = createAsyncThunk<
   async (_, { rejectWithValue }) => {
     try {
       const response = await axiosClient.get("/pending-proceedings/dashboard");
+      
+      if (!response.data?.data) {
+        throw new Error("Invalid response structure");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to fetch admin dashboard:", err);
@@ -389,6 +454,11 @@ export const getCategories = createAsyncThunk<
   async (_, { rejectWithValue }) => {
     try {
       const response = await axiosClient.get("/pending-proceedings/categories");
+      
+      if (!response.data?.data) {
+        throw new Error("Invalid response structure");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to fetch categories:", err);
@@ -417,6 +487,11 @@ export const downloadReport = createAsyncThunk<
       if (toDate) params.toDate = toDate;
       
       const response = await axiosClient.get("/pending-proceedings/download-report", { params });
+      
+      if (!response.data?.data) {
+        throw new Error("Invalid response structure");
+      }
+      
       return { data: response.data.data, format };
     } catch (err: unknown) {
       console.error("❌ Failed to download report:", err);
@@ -445,6 +520,11 @@ export const bulkUpsertSubmissions = createAsyncThunk<
   async (submissions, { rejectWithValue }) => {
     try {
       const response = await axiosClient.post("/pending-proceedings/bulk", { submissions });
+      
+      if (!response.data?.data) {
+        throw new Error("Invalid response structure");
+      }
+      
       return response.data.data;
     } catch (err: unknown) {
       console.error("❌ Failed to bulk upsert submissions:", err);
@@ -501,11 +581,11 @@ const pendingProceedingsSlice = createSlice({
       })
       .addCase(getSubmissions.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.submissions = action.payload.submissions;
+        state.submissions = action.payload.submissions || [];
         state.pagination = {
-          page: action.payload.page,
-          limit: action.payload.limit,
-          total: action.payload.total,
+          page: action.payload.page || 1,
+          limit: action.payload.limit || 20,
+          total: action.payload.total || 0,
         };
       })
       .addCase(getSubmissions.rejected, (state, action) => {
@@ -520,11 +600,11 @@ const pendingProceedingsSlice = createSlice({
       })
       .addCase(getMySubmissions.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.submissions = action.payload.submissions;
+        state.submissions = action.payload.submissions || [];
         state.pagination = {
-          page: action.payload.page,
-          limit: action.payload.limit,
-          total: action.payload.total,
+          page: action.payload.page || 1,
+          limit: action.payload.limit || 20,
+          total: action.payload.total || 0,
         };
       })
       .addCase(getMySubmissions.rejected, (state, action) => {
@@ -553,17 +633,17 @@ const pendingProceedingsSlice = createSlice({
       })
       .addCase(createSubmission.fulfilled, (state, action) => {
         state.isSubmitting = false;
-        state.currentSubmission = action.payload.submission;
-        state.submissions.unshift({
-          id: action.payload.submission.id,
-          station: action.payload.submission.station,
-          courtOfAppealTotal: action.payload.submission.courtOfAppeal.reduce((sum, item) => sum + item.quantity, 0),
-          subordinateCourtsTotal: action.payload.submission.subordinateCourts.reduce((sum, item) => sum + item.quantity, 0),
-          status: action.payload.submission.status,
-          submittedAt: action.payload.submission.submittedAt,
-          updatedAt: action.payload.submission.updatedAt,
-          submitterName: action.payload.submission.submitterName,
-        });
+        
+        // ✅ Safely access the submission
+        const submission = action.payload?.submission;
+        if (!submission) {
+          console.error("❌ No submission in payload:", action.payload);
+          state.error = "Invalid response from server";
+          return;
+        }
+        
+        state.currentSubmission = submission;
+        state.submissions.unshift(createSummary(submission));
       })
       .addCase(createSubmission.rejected, (state, action) => {
         state.isSubmitting = false;
@@ -577,19 +657,19 @@ const pendingProceedingsSlice = createSlice({
       })
       .addCase(updateSubmission.fulfilled, (state, action) => {
         state.isSubmitting = false;
-        state.currentSubmission = action.payload.submission;
-        const index = state.submissions.findIndex((s) => s.id === action.payload.submission.id);
+        
+        // ✅ Safely access the submission
+        const submission = action.payload?.submission;
+        if (!submission) {
+          console.error("❌ No submission in payload:", action.payload);
+          state.error = "Invalid response from server";
+          return;
+        }
+        
+        state.currentSubmission = submission;
+        const index = state.submissions.findIndex((s) => s.id === submission.id);
         if (index !== -1) {
-          state.submissions[index] = {
-            id: action.payload.submission.id,
-            station: action.payload.submission.station,
-            courtOfAppealTotal: action.payload.submission.courtOfAppeal.reduce((sum, item) => sum + item.quantity, 0),
-            subordinateCourtsTotal: action.payload.submission.subordinateCourts.reduce((sum, item) => sum + item.quantity, 0),
-            status: action.payload.submission.status,
-            submittedAt: action.payload.submission.submittedAt,
-            updatedAt: action.payload.submission.updatedAt,
-            submitterName: action.payload.submission.submitterName,
-          };
+          state.submissions[index] = createSummary(submission);
         }
       })
       .addCase(updateSubmission.rejected, (state, action) => {
@@ -647,7 +727,7 @@ const pendingProceedingsSlice = createSlice({
       })
       .addCase(getCategories.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.categories = action.payload.data;
+        state.categories = action.payload.data || [];
       })
       .addCase(getCategories.rejected, (state, action) => {
         state.isLoading = false;
@@ -675,21 +755,11 @@ const pendingProceedingsSlice = createSlice({
       })
       .addCase(bulkUpsertSubmissions.fulfilled, (state, action) => {
         state.isSubmitting = false;
-        // Refresh submissions list after bulk operation
-        // The individual results will be added/updated in the list
-        const results = action.payload.results;
+        
+        const results = action.payload.results || [];
         for (const result of results) {
           const existingIndex = state.submissions.findIndex((s) => s.id === result.id);
-          const summary = {
-            id: result.id,
-            station: result.station,
-            courtOfAppealTotal: result.courtOfAppeal.reduce((sum, item) => sum + item.quantity, 0),
-            subordinateCourtsTotal: result.subordinateCourts.reduce((sum, item) => sum + item.quantity, 0),
-            status: result.status,
-            submittedAt: result.submittedAt,
-            updatedAt: result.updatedAt,
-            submitterName: result.submitterName,
-          };
+          const summary = createSummary(result);
           if (existingIndex !== -1) {
             state.submissions[existingIndex] = summary;
           } else {
